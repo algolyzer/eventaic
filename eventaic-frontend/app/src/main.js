@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import App from './App.vue'
 import './assets/tailwind.css'
 import routes from './router'
-import { api, getToken } from './services/api'
+import { useAuthStore } from './stores/auth'
 
 const router = createRouter({
   history: createWebHistory('/app/'),
@@ -12,12 +12,17 @@ const router = createRouter({
 
 // Auth guard
 router.beforeEach((to, from, next) => {
-  const authed = !!getToken()
-  if (to.meta.requiresAuth && !authed) {
+  const { isAuthenticated } = useAuthStore()
+
+  if (to.meta.requiresAuth && !isAuthenticated.value) {
     next({ name: 'login', query: { redirect: to.fullPath } })
+  } else if (to.meta.public && isAuthenticated.value && to.name === 'login') {
+    next({ name: 'dashboard' })
   } else {
     next()
   }
 })
 
-createApp(App).use(router).mount('#app')
+const app = createApp(App)
+app.use(router)
+app.mount('#app')

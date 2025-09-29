@@ -1,46 +1,65 @@
-import {createRouter, createWebHistory} from 'vue-router'
-import {useAuthStore} from '@/stores/auth'
+const routes = [
+    {path: '/', redirect: '/dashboard'},
 
-// Lazy pages (match the actual folders we created)
-const Login = () => import('@/pages/auth/Login.vue')
-const Register = () => import('@/pages/auth/Register.vue')
-const Forgot = () => import('@/pages/auth/Forgot.vue')
-const Dashboard = () => import('@/pages/Dashboard.vue')
-const Profile = () => import('@/pages/Profile.vue')
-const Company = () => import('@/pages/Company.vue')
-const AdminOverview = () => import('@/pages/admin/AdminOverview.vue')
-const AdminUsers = () => import('@/pages/admin/AdminUsers.vue')
-const AdminCompanies = () => import('@/pages/admin/AdminCompanies.vue')
+    // Auth routes
+    {
+        path: '/auth/login',
+        name: 'login',
+        component: () => import('@/pages/Login.vue'),
+        meta: {layout: 'auth', public: true}
+    },
+    {
+        path: '/auth/register',
+        name: 'register',
+        component: () => import('@/pages/Register.vue'),
+        meta: {layout: 'auth', public: true}
+    },
+    {
+        path: '/auth/forgot',
+        name: 'forgot',
+        component: () => import('@/pages/Forgot.vue'),
+        meta: {layout: 'auth', public: true}
+    },
 
-const router = createRouter({
-    history: createWebHistory('/app'),
-    routes: [
-        {path: '/', redirect: '/dashboard'},
-        {path: '/auth/login', name: 'login', component: Login, meta: {public: true}},
-        {path: '/auth/register', name: 'register', component: Register, meta: {public: true}},
-        {path: '/auth/forgot', name: 'forgot', component: Forgot, meta: {public: true}},
+    // App routes
+    {
+        path: '/dashboard',
+        name: 'dashboard',
+        component: () => import('@/pages/Dashboard.vue'),
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/profile',
+        name: 'profile',
+        component: () => import('@/pages/Profile.vue'),
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/company',
+        name: 'company',
+        component: () => import('@/pages/CompanyProfile.vue'),
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/admin',
+        name: 'admin',
+        component: () => import('@/pages/Admin.vue'),
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/admin/users',
+        name: 'admin-users',
+        component: () => import('@/pages/AdminUsers.vue'),
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/admin/companies',
+        name: 'admin-companies',
+        component: () => import('@/pages/AdminCompanies.vue'),
+        meta: {requiresAuth: true}
+    },
 
-        {path: '/dashboard', name: 'dashboard', component: Dashboard},
-        {path: '/profile', name: 'profile', component: Profile},
-        {path: '/company', name: 'company', component: Company},
+    {path: '/:pathMatch(.*)*', redirect: '/dashboard'}
+]
 
-        {path: '/admin', name: 'admin', component: AdminOverview},
-        {path: '/admin/users', name: 'admin-users', component: AdminUsers},
-        {path: '/admin/companies', name: 'admin-companies', component: AdminCompanies},
-
-        {path: '/:pathMatch(.*)*', redirect: '/dashboard'}
-    ],
-    scrollBehavior() {
-        return {top: 0}
-    }
-})
-
-router.beforeEach((to, _from, next) => {
-    const auth = useAuthStore()
-    if (!to.meta.public && !auth.isAuthenticated) {
-        return next({name: 'login', query: {redirect: to.fullPath}})
-    }
-    next()
-})
-
-export default router
+export default routes

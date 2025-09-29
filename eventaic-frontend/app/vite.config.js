@@ -7,18 +7,19 @@ export default defineConfig({
     plugins: [vue()],
     resolve: {
         alias: {
-            '@': fileURLToPath(new URL('./src', import.meta.url)),
-        },
+            '@': fileURLToPath(new URL('./src', import.meta.url))
+        }
     },
     server: {
         port: 5173,
-        strictPort: true,
+        host: true,
+        strictPort: false,
         proxy: {
-            // FastAPI (adjust target if your backend runs elsewhere)
             '/api': {
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
-            },
-        },
-    },
+                secure: false
+            }
+        }
+    }
 })

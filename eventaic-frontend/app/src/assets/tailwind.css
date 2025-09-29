@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* App-wide styles to mirror landing vibe */
+:root {
+  --bg: #0b0b11;
+  --soft: #10111a;
+  --border: rgba(255,255,255,.12);
+}
+body {
+  background:
+    radial-gradient(1200px 1200px at 10% -10%, rgba(124, 92, 255, 0.25), transparent 60%),
+    radial-gradient(1200px 1000px at 90% 10%, rgba(0, 212, 255, 0.18), transparent 60%),
+    var(--bg);
+}
+.bg-glass {
+  @apply bg-white/5;
+  backdrop-filter: blur(10px) saturate(130%);
+}
+.card {
+  @apply rounded-2xl border border-white/10 bg-white/5 shadow-soft;
+}
+.btn {
+  @apply inline-flex items-center gap-2 rounded-full px-4 py-2 font-semibold border border-white/10 shadow-soft;
+  background: linear-gradient(135deg, #7c5cff 0%, #00d4ff 100%);
+  color: #0b0b11;
+}
+.btn-ghost {
+  @apply border-white/15 bg-transparent text-white;
+}
+.input {
+  @apply w-full rounded-xl border border-white/15 bg-transparent px-4 py-3 outline-none placeholder:text-white/50;
+}
+.badge {
+  @apply inline-flex items-center gap-2 rounded-full border border-white/15 px-3 py-1 text-sm text-white/80;
+}
+.link {
+  @apply text-brand-violet hover:underline;
+}
+/* Sidebar active indicator */
+.nav-active {
+  background: linear-gradient(180deg, rgba(124, 92, 255, .22), rgba(0, 212, 255, .22));
+  border-color: rgba(255,255,255,.12);
+}

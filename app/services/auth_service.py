@@ -65,12 +65,10 @@ class AuthService:
         return user
 
     def authenticate_user(self, username: str, password: str) -> Optional[User]:
-        """Authenticate user by username or email"""
+        """Authenticate user by username"""
 
-        # Try to find user by username or email
+        # Find user by username
         user = self.user_repository.get_by_username(username)
-        if not user:
-            user = self.user_repository.get_by_email(username)
 
         if not user:
             return None
@@ -82,6 +80,45 @@ class AuthService:
         # Check if user is active
         if not user.is_active or user.is_deleted:
             return None
+
+        return user
+
+    def authenticate_user_by_email(self, email: str, password: str) -> Optional[User]:
+        """Authenticate user by email"""
+
+        # Find user by email
+        user = self.user_repository.get_by_email(email)
+
+        if not user:
+            return None
+
+        # Verify password
+        if not self.security.verify_password(password, user.hashed_password):
+            return None
+
+        # Check if user is active
+        if not user.is_active or user.is_deleted:
+            return None
+
+        return user
+
+    def authenticate_user_flexible(self, identifier: str, password: str) -> Optional[User]:
+        """
+        Authenticate user by either username or email
+        Tries email first if @ is present, otherwise username
+        """
+
+        # Determine if identifier looks like an email
+        if '@' in identifier:
+            # Try email first, then username as fallback
+            user = self.authenticate_user_by_email(identifier, password)
+            if not user:
+                user = self.authenticate_user(identifier, password)
+        else:
+            # Try username first, then email as fallback
+            user = self.authenticate_user(identifier, password)
+            if not user:
+                user = self.authenticate_user_by_email(identifier, password)
 
         return user
 

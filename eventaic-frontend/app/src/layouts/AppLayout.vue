@@ -1,18 +1,20 @@
 <script setup>
 import {ref} from 'vue'
-import Sidebar from '@/components/layout/Sidebar.vue'
-import Topbar from '@/components/layout/Topbar.vue'
+import Sidebar from '@/components/Sidebar.vue'
+import Topbar from '@/components/Topbar.vue'
 
-const open = ref(false)
+const sidebarOpen = ref(false)
 </script>
 
 <template>
-  <div class="min-h-screen grid grid-cols-1 lg:grid-cols-[18rem_1fr]">
-    <Sidebar :open="open" @logout="$emit('logout')"/>
-    <div class="lg:ml-72">
-      <Topbar @toggle="open = !open"/>
-      <main class="max-w-7xl mx-auto px-4 py-6">
-        <slot/>
+  <div class="min-h-screen flex">
+    <Sidebar :open="sidebarOpen" @close="sidebarOpen = false"/>
+    <div class="flex-1 flex flex-col md:ml-72">
+      <Topbar @toggleSidebar="sidebarOpen = !sidebarOpen"/>
+      <main class="flex-1">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-8">
+          <slot/>
+        </div>
       </main>
     </div>
   </div>

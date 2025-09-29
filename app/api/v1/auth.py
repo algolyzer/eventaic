@@ -51,7 +51,18 @@ async def register(
     # Generate tokens
     tokens = auth_service.create_tokens(user)
 
-    return tokens
+    # Add user info to response
+    tokens_dict = tokens.dict() if hasattr(tokens, 'dict') else tokens.__dict__
+    tokens_dict['user'] = {
+        'id': str(user.id),
+        'email': user.email,
+        'username': user.username,
+        'full_name': user.full_name,
+        'role': user.role.value if hasattr(user.role, 'value') else user.role,
+        'company_id': str(user.company_id) if user.company_id else None
+    }
+
+    return tokens_dict
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -59,16 +70,39 @@ async def login(
         request: LoginRequest,
         db: Session = Depends(get_db)
 ):
-    """Login user"""
+    """
+    Login user with username OR email
+
+    The 'username' field accepts either:
+    - Username (e.g., 'john_doe')
+    - Email address (e.g., 'john@example.com')
+    """
 
     auth_service = AuthService(db)
 
-    # Authenticate user
-    user = auth_service.authenticate_user(request.username, request.password)
+    # The username field can contain either username or email
+    login_identifier = request.username
+
+    # Check if it looks like an email
+    if '@' in login_identifier:
+        # Try to authenticate with email
+        user = auth_service.authenticate_user_by_email(login_identifier, request.password)
+    else:
+        # Try to authenticate with username
+        user = auth_service.authenticate_user(login_identifier, request.password)
+
+    if not user:
+        # If first attempt failed, try the opposite
+        # (in case someone has @ in their username or email without @)
+        if '@' in login_identifier:
+            user = auth_service.authenticate_user(login_identifier, request.password)
+        else:
+            user = auth_service.authenticate_user_by_email(login_identifier, request.password)
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect username/email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -85,7 +119,18 @@ async def login(
     # Generate tokens
     tokens = auth_service.create_tokens(user)
 
-    return tokens
+    # Add user info to response
+    tokens_dict = tokens.dict() if hasattr(tokens, 'dict') else tokens.__dict__
+    tokens_dict['user'] = {
+        'id': str(user.id),
+        'email': user.email,
+        'username': user.username,
+        'full_name': user.full_name,
+        'role': user.role.value if hasattr(user.role, 'value') else user.role,
+        'company_id': str(user.company_id) if user.company_id else None
+    }
+
+    return tokens_dict
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -108,7 +153,18 @@ async def refresh_token(
     # Generate new tokens
     tokens = auth_service.create_tokens(user)
 
-    return tokens
+    # Add user info to response
+    tokens_dict = tokens.dict() if hasattr(tokens, 'dict') else tokens.__dict__
+    tokens_dict['user'] = {
+        'id': str(user.id),
+        'email': user.email,
+        'username': user.username,
+        'full_name': user.full_name,
+        'role': user.role.value if hasattr(user.role, 'value') else user.role,
+        'company_id': str(user.company_id) if user.company_id else None
+    }
+
+    return tokens_dict
 
 
 @router.post("/logout")
@@ -245,3 +301,24 @@ async def change_password(
     auth_service.update_password(current_user, request.new_password)
 
     return {"message": "Password successfully changed"}
+
+
+@router.get("/me")
+async def get_current_user_info(
+        current_user: User = Depends(get_current_active_user)
+):
+    """Get current user information"""
+
+    return {
+        'id': str(current_user.id),
+        'email': current_user.email,
+        'username': current_user.username,
+        'full_name': current_user.full_name,
+        'phone': current_user.phone,
+        'role': current_user.role.value if hasattr(current_user.role, 'value') else current_user.role,
+        'is_email_verified': current_user.is_email_verified,
+        'company_id': str(current_user.company_id) if current_user.company_id else None,
+        'company_name': current_user.company.name if current_user.company else None,
+        'created_at': current_user.created_at.isoformat() if current_user.created_at else None,
+        'last_login': current_user.last_login.isoformat() if current_user.last_login else None
+    }

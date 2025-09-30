@@ -58,14 +58,19 @@ class DifyService:
                     if response.status != 200:
                         error_text = await response.text()
                         logger.error(f"Dify API error: {response.status} - {error_text}")
-                        raise Exception(f"Dify API error: {response.status}")
+                        raise Exception(f"Dify API returned status {response.status}")
 
                     result = await response.json()
+                    logger.info(f"Dify response received: {result.get('answer', '')[:100]}...")
+
                     return self._parse_generation_response(result)
 
         except aiohttp.ClientError as e:
             logger.error(f"Dify connection error: {str(e)}")
-            raise Exception(f"Failed to connect to Dify: {str(e)}")
+            raise Exception(f"Failed to connect to AI service: {str(e)}")
+        except Exception as e:
+            logger.error(f"Dify request failed: {str(e)}")
+            raise Exception(f"AI service error: {str(e)}")
 
     async def regenerate_ad(
             self,
@@ -99,14 +104,16 @@ class DifyService:
                         timeout=self.timeout
                 ) as response:
                     if response.status != 200:
-                        raise Exception(f"Dify API error: {response.status}")
+                        raise Exception(f"Dify API returned status {response.status}")
 
                     result = await response.json()
+                    logger.info(f"Dify regeneration response received")
+
                     return self._parse_generation_response(result)
 
         except Exception as e:
             logger.error(f"Regeneration failed: {str(e)}")
-            raise
+            raise Exception(f"AI regeneration failed: {str(e)}")
 
     async def evaluate_ad(self, ad_data: Dict[str, Any]) -> Dict[str, Any]:
         """Evaluate ad quality"""
@@ -129,14 +136,16 @@ class DifyService:
                         timeout=self.timeout
                 ) as response:
                     if response.status != 200:
-                        raise Exception(f"Dify API error: {response.status}")
+                        raise Exception(f"Dify API returned status {response.status}")
 
                     result = await response.json()
+                    logger.info(f"Dify evaluation response received")
+
                     return self._parse_evaluation_response(result)
 
         except Exception as e:
             logger.error(f"Evaluation failed: {str(e)}")
-            raise
+            raise Exception(f"AI evaluation failed: {str(e)}")
 
     def _build_generation_prompt(
             self,
@@ -153,35 +162,36 @@ class DifyService:
         location_str = location or "Global"
         product_str = product_name or "General Products"
 
-        return f"""
-        Type: {ad_type.value}
-        Company: {company_name}
-        Location: {location_str}
-        Product Categories: {categories_str}
-        Event: {event_name}
-        Product Name: {product_str}
+        return f"""Generate an advertising campaign for the following:
 
-        Generate a complete advertising campaign with the following JSON structure:
-        {{
-            "headline": "Catchy headline (max 60 characters)",
-            "description": "Compelling description (max 150 characters)",
-            "slogan": "Memorable slogan",
-            "cta_text": "Call to action",
-            "image_prompt": "Detailed image generation prompt",
-            "image_base64": "Base64 encoded image if generated",
-            "keywords": ["keyword1", "keyword2", ...],
-            "hashtags": ["#hashtag1", "#hashtag2", ...],
-            "platforms": ["google_ads", "meta_ads", ...],
-            "platform_details": {{
-                "google_ads": {{"priority": 1, "budget_percentage": 40}},
-                "meta_ads": {{"priority": 2, "budget_percentage": 30}}
-            }},
-            "posting_times": ["9:00 AM", "2:00 PM", "6:00 PM"],
-            "budget_allocation": {{"platform": percentage}}
-        }}
+Event: {event_name}
+Company: {company_name}
+Location: {location_str}
+Product Categories: {categories_str}
+Product Name: {product_str}
 
-        Ensure the content is event-specific, engaging, and optimized for conversions.
-        """
+Please respond with ONLY a valid JSON object (no additional text before or after) in this exact format:
+{{
+    "headline": "Catchy headline (max 60 characters)",
+    "description": "Compelling description (max 150 characters)",
+    "slogan": "Memorable slogan",
+    "cta_text": "Call to action",
+    "image_prompt": "Detailed image generation prompt",
+    "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"],
+    "platforms": ["google_ads", "meta_ads", "linkedin", "instagram", "tiktok"],
+    "platform_details": {{
+        "google_ads": {{"priority": 1, "budget_percentage": 40}},
+        "meta_ads": {{"priority": 2, "budget_percentage": 30}},
+        "linkedin": {{"priority": 3, "budget_percentage": 15}},
+        "instagram": {{"priority": 4, "budget_percentage": 10}},
+        "tiktok": {{"priority": 5, "budget_percentage": 5}}
+    }},
+    "posting_times": ["9:00 AM", "2:00 PM", "6:00 PM"],
+    "budget_allocation": {{"google_ads": 40, "meta_ads": 30, "linkedin": 15, "instagram": 10, "tiktok": 5}}
+}}
+
+Make the content specific to the event, engaging, and optimized for conversions. Use only valid JSON format."""
 
     def _build_regeneration_prompt(
             self,
@@ -191,36 +201,48 @@ class DifyService:
     ) -> str:
         """Build prompt for regeneration"""
 
-        base_prompt = f"""
-        Type: {ad_type.value}
+        base_prompt = f"""Regenerate an improved version of this advertisement:
 
-        Original Ad Data:
-        Event: {ad_data.get('event_name')}
-        Company: {ad_data.get('company_name')}
-        Product Categories: {', '.join(ad_data.get('product_categories', []))}
+Event: {ad_data.get('event_name')}
+Company: {ad_data.get('company_name')}
+Product Categories: {', '.join(ad_data.get('product_categories', []))}
 
-        Original Content:
-        Headline: {ad_data.get('headline')}
-        Description: {ad_data.get('description')}
-        Slogan: {ad_data.get('slogan')}
-        """
+Original Content:
+Headline: {ad_data.get('headline')}
+Description: {ad_data.get('description')}
+Slogan: {ad_data.get('slogan')}
+"""
 
         if ad_type == AdType.REGEN_IMAGE:
             base_prompt += f"""
 
-            Generate ONLY a new image with the same theme but different visual approach.
-            Return JSON with:
-            {{
-                "image_prompt": "New detailed image prompt",
-                "image_base64": "Base64 encoded image if generated"
-            }}
-            """
+Generate ONLY a new image prompt. Respond with valid JSON:
+{{
+    "image_prompt": "New detailed image generation prompt"
+}}
+"""
         else:
             base_prompt += f"""
 
-            Generate completely new ad content while maintaining the same event and product context.
-            Return complete JSON structure as in original generation.
-            """
+Generate completely new ad content while maintaining the same event theme. Respond with ONLY a valid JSON object in this exact format:
+{{
+    "headline": "New catchy headline",
+    "description": "New compelling description",
+    "slogan": "New memorable slogan",
+    "cta_text": "Call to action",
+    "image_prompt": "Detailed image prompt",
+    "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+    "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"],
+    "platforms": ["google_ads", "meta_ads", "linkedin"],
+    "platform_details": {{
+        "google_ads": {{"priority": 1, "budget_percentage": 50}},
+        "meta_ads": {{"priority": 2, "budget_percentage": 35}},
+        "linkedin": {{"priority": 3, "budget_percentage": 15}}
+    }},
+    "posting_times": ["9:00 AM", "2:00 PM", "6:00 PM"],
+    "budget_allocation": {{"google_ads": 50, "meta_ads": 35, "linkedin": 15}}
+}}
+"""
 
         if additional_instructions:
             base_prompt += f"\n\nAdditional Instructions: {additional_instructions}"
@@ -230,114 +252,158 @@ class DifyService:
     def _build_evaluation_prompt(self, ad_data: Dict[str, Any]) -> str:
         """Build prompt for evaluation"""
 
-        return f"""
-        Type: {AdType.EVALUATE.value}
+        return f"""Evaluate this advertisement:
 
-        Evaluate the following advertisement:
+Event: {ad_data.get('event_name')}
+Company: {ad_data.get('company_name')}
+Product Categories: {', '.join(ad_data.get('product_categories', []))}
 
-        Event: {ad_data.get('event_name')}
-        Company: {ad_data.get('company_name')}
-        Product Categories: {', '.join(ad_data.get('product_categories', []))}
+Ad Content:
+Headline: {ad_data.get('headline')}
+Description: {ad_data.get('description')}
+Slogan: {ad_data.get('slogan')}
+CTA: {ad_data.get('cta_text')}
+Keywords: {', '.join(ad_data.get('keywords', []))}
+Hashtags: {', '.join(ad_data.get('hashtags', []))}
 
-        Ad Content:
-        Headline: {ad_data.get('headline')}
-        Description: {ad_data.get('description')}
-        Slogan: {ad_data.get('slogan')}
-        CTA: {ad_data.get('cta_text')}
-        Keywords: {', '.join(ad_data.get('keywords', []))}
-        Hashtags: {', '.join(ad_data.get('hashtags', []))}
+Respond with ONLY a valid JSON object (no additional text) in this exact format:
+{{
+    "relevance_score": 8.5,
+    "clarity_score": 9.0,
+    "persuasiveness_score": 8.0,
+    "brand_safety_score": 9.5,
+    "overall_score": 8.75,
+    "feedback": "Detailed feedback text explaining the scores",
+    "recommendations": ["recommendation 1", "recommendation 2", "recommendation 3"]
+}}
 
-        Provide evaluation in JSON format:
-        {{
-            "relevance_score": 0-10,
-            "clarity_score": 0-10,
-            "persuasiveness_score": 0-10,
-            "brand_safety_score": 0-10,
-            "overall_score": 0-10,
-            "feedback": "Detailed feedback text",
-            "recommendations": ["recommendation1", "recommendation2", ...]
-        }}
-
-        Consider event relevance, message clarity, persuasiveness, and brand safety.
-        """
+Scores should be between 0-10. Consider event relevance, message clarity, persuasiveness, and brand safety."""
 
     def _parse_generation_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse Dify generation response"""
+        """Parse Dify generation response - STRICT JSON parsing"""
 
         try:
-            answer = response.get("answer", "{}")
+            answer = response.get("answer", "{}").strip()
 
-            # Try to parse JSON from the answer
+            if not answer:
+                raise ValueError("Empty response from Dify")
+        except Exception:
+            raise ValueError("Empty response from Dify")
+
+    def _parse_generation_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
+        """Parse Dify generation response - STRICT JSON parsing"""
+
+        try:
+            answer = response.get("answer", "{}").strip()
+
+            if not answer:
+                raise ValueError("Empty response from Dify")
+
+            # Log the raw response for debugging
+            logger.debug(f"Raw Dify response: {answer[:500]}")
+
+            # Try to find JSON in the response
+            # Sometimes LLMs add text before/after JSON
+            json_start = answer.find('{')
+            json_end = answer.rfind('}')
+
+            if json_start == -1 or json_end == -1:
+                raise ValueError("No JSON object found in response")
+
+            json_str = answer[json_start:json_end + 1]
+
             try:
-                parsed = json.loads(answer)
-            except json.JSONDecodeError:
-                # Extract JSON from text if needed
-                import re
-                json_match = re.search(r'\{.*\}', answer, re.DOTALL)
-                if json_match:
-                    parsed = json.loads(json_match.group())
-                else:
-                    # Fallback to default structure
-                    parsed = self._get_default_ad_content()
+                parsed = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"JSON decode error: {str(e)}")
+                logger.error(f"Failed JSON string: {json_str[:500]}")
+                raise ValueError(f"Invalid JSON in response: {str(e)}")
 
+            # Validate required fields
+            required_fields = ['headline', 'description', 'slogan', 'cta_text', 'keywords', 'hashtags', 'platforms']
+            missing_fields = [field for field in required_fields if field not in parsed]
+
+            if missing_fields:
+                logger.warning(f"Missing required fields: {missing_fields}")
+                # Fill missing fields with defaults
+                defaults = {
+                    'headline': 'Special Offer',
+                    'description': 'Limited time offer',
+                    'slogan': 'Act Now',
+                    'cta_text': 'Learn More',
+                    'keywords': ['sale', 'offer', 'limited'],
+                    'hashtags': ['#sale', '#offer'],
+                    'platforms': ['google_ads', 'meta_ads'],
+                    'image_prompt': 'Professional marketing image',
+                    'platform_details': {
+                        'google_ads': {'priority': 1, 'budget_percentage': 50},
+                        'meta_ads': {'priority': 2, 'budget_percentage': 50}
+                    },
+                    'posting_times': ['9:00 AM', '2:00 PM', '6:00 PM'],
+                    'budget_allocation': {'google_ads': 50, 'meta_ads': 50}
+                }
+                for field in missing_fields:
+                    parsed[field] = defaults.get(field, '')
+
+            logger.info("Successfully parsed Dify generation response")
             return parsed
 
         except Exception as e:
             logger.error(f"Failed to parse Dify response: {str(e)}")
-            return self._get_default_ad_content()
+            raise ValueError(f"Unable to parse AI response: {str(e)}")
 
     def _parse_evaluation_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse Dify evaluation response"""
+        """Parse Dify evaluation response - STRICT JSON parsing"""
 
         try:
-            answer = response.get("answer", "{}")
+            answer = response.get("answer", "{}").strip()
+
+            if not answer:
+                raise ValueError("Empty evaluation response from Dify")
+
+            logger.debug(f"Raw evaluation response: {answer[:500]}")
+
+            # Find JSON in response
+            json_start = answer.find('{')
+            json_end = answer.rfind('}')
+
+            if json_start == -1 or json_end == -1:
+                raise ValueError("No JSON object found in evaluation response")
+
+            json_str = answer[json_start:json_end + 1]
 
             try:
-                parsed = json.loads(answer)
-            except json.JSONDecodeError:
-                # Extract JSON from text if needed
-                import re
-                json_match = re.search(r'\{.*\}', answer, re.DOTALL)
-                if json_match:
-                    parsed = json.loads(json_match.group())
-                else:
-                    parsed = self._get_default_evaluation()
+                parsed = json.loads(json_str)
+            except json.JSONDecodeError as e:
+                logger.error(f"Evaluation JSON decode error: {str(e)}")
+                raise ValueError(f"Invalid JSON in evaluation: {str(e)}")
 
+            # Validate and fix scores
+            score_fields = ['relevance_score', 'clarity_score', 'persuasiveness_score', 'brand_safety_score',
+                            'overall_score']
+            for field in score_fields:
+                if field not in parsed:
+                    parsed[field] = 5.0
+                else:
+                    # Ensure scores are float and within 0-10 range
+                    try:
+                        score = float(parsed[field])
+                        parsed[field] = max(0.0, min(10.0, score))
+                    except (ValueError, TypeError):
+                        parsed[field] = 5.0
+
+            # Ensure feedback and recommendations exist
+            if 'feedback' not in parsed or not parsed['feedback']:
+                parsed['feedback'] = 'Evaluation completed successfully'
+
+            if 'recommendations' not in parsed:
+                parsed['recommendations'] = []
+            elif not isinstance(parsed['recommendations'], list):
+                parsed['recommendations'] = []
+
+            logger.info("Successfully parsed Dify evaluation response")
             return parsed
 
         except Exception as e:
             logger.error(f"Failed to parse evaluation response: {str(e)}")
-            return self._get_default_evaluation()
-
-    def _get_default_ad_content(self) -> Dict[str, Any]:
-        """Default ad content structure"""
-
-        return {
-            "headline": "Special Event Sale",
-            "description": "Don't miss our exclusive offers",
-            "slogan": "Quality You Can Trust",
-            "cta_text": "Shop Now",
-            "image_prompt": "Professional advertisement for special event",
-            "keywords": ["sale", "discount", "special"],
-            "hashtags": ["#sale", "#special"],
-            "platforms": ["google_ads", "meta_ads"],
-            "platform_details": {
-                "google_ads": {"priority": 1, "budget_percentage": 50},
-                "meta_ads": {"priority": 2, "budget_percentage": 50}
-            },
-            "posting_times": ["9:00 AM", "2:00 PM", "6:00 PM"],
-            "budget_allocation": {"google_ads": 50, "meta_ads": 50}
-        }
-
-    def _get_default_evaluation(self) -> Dict[str, Any]:
-        """Default evaluation structure"""
-
-        return {
-            "relevance_score": 5.0,
-            "clarity_score": 5.0,
-            "persuasiveness_score": 5.0,
-            "brand_safety_score": 5.0,
-            "overall_score": 5.0,
-            "feedback": "Unable to evaluate at this time",
-            "recommendations": []
-        }
+            raise ValueError(f"Unable to parse evaluation: {str(e)}")

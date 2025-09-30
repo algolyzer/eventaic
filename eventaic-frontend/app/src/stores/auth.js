@@ -19,13 +19,16 @@ export const useAuthStore = () => {
         state.error = null
         try {
             const response = await api.post('/api/v1/auth/login', {
-                username: credentials.email,
+                username: credentials.email || credentials.username,
                 password: credentials.password
             })
             const token = response.data.access_token
+            const user = response.data.user || {email: credentials.email}
+
             state.token = token
-            state.user = response.data.user || {email: credentials.email}
-            setAuth(token, state.user)
+            state.user = user
+            setAuth(token, user)
+
             return response.data
         } catch (err) {
             state.error = err.message
@@ -41,9 +44,12 @@ export const useAuthStore = () => {
         try {
             const response = await api.post('/api/v1/auth/register', data)
             const token = response.data.access_token
+            const user = response.data.user || {email: data.email}
+
             state.token = token
-            state.user = response.data.user || {email: data.email}
-            setAuth(token, state.user)
+            state.user = user
+            setAuth(token, user)
+
             return response.data
         } catch (err) {
             state.error = err.message
@@ -53,11 +59,46 @@ export const useAuthStore = () => {
         }
     }
 
+    const updateUser = (userData) => {
+        // Update state
+        state.user = {
+            ...state.user,
+            ...userData
+        }
+
+        // Update localStorage
+        try {
+            const currentUser = JSON.parse(localStorage.getItem('eventaic:user') || '{}')
+            const updatedUser = {
+                ...currentUser,
+                ...userData
+            }
+            localStorage.setItem('eventaic:user', JSON.stringify(updatedUser))
+        } catch (error) {
+            console.error('Error updating user in localStorage:', error)
+        }
+    }
+
     const logout = () => {
         state.user = null
         state.token = null
         clearAuth()
     }
+
+    // Load user from localStorage on init
+    const loadUser = () => {
+        try {
+            const userStr = localStorage.getItem('eventaic:user')
+            if (userStr) {
+                state.user = JSON.parse(userStr)
+            }
+        } catch (error) {
+            console.error('Error loading user from localStorage:', error)
+        }
+    }
+
+    // Initialize user data
+    loadUser()
 
     return {
         isAuthenticated,
@@ -66,6 +107,8 @@ export const useAuthStore = () => {
         error,
         login,
         register,
-        logout
+        logout,
+        updateUser,
+        loadUser
     }
 }

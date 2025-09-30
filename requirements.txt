@@ -31,6 +31,4 @@ slowapi
 python-dateutil
 
 # Testing
-pytest
-pytest-asyncio
 httpx

@@ -51,52 +51,43 @@ async def register(
     # Generate tokens
     tokens = auth_service.create_tokens(user)
 
-    # Add user info to response
-    tokens_dict = tokens.dict() if hasattr(tokens, 'dict') else tokens.__dict__
-    tokens_dict['user'] = {
-        'id': str(user.id),
-        'email': user.email,
-        'username': user.username,
-        'full_name': user.full_name,
-        'role': user.role.value if hasattr(user.role, 'value') else user.role,
-        'company_id': str(user.company_id) if user.company_id else None
+    # Return response with user data
+    return {
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "token_type": tokens.token_type,
+        "expires_in": tokens.expires_in,
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "username": user.username,
+            "full_name": user.full_name,
+            "name": user.full_name or user.username,  # Add 'name' for compatibility
+            "role": user.role.value if hasattr(user.role, 'value') else user.role,
+            "company_id": str(user.company_id) if user.company_id else None,
+            "company_name": user.company.name if user.company else None
+        }
     }
 
-    return tokens_dict
 
-
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 async def login(
         request: LoginRequest,
         db: Session = Depends(get_db)
 ):
-    """
-    Login user with username OR email
-
-    The 'username' field accepts either:
-    - Username (e.g., 'john_doe')
-    - Email address (e.g., 'john@example.com')
-    """
+    """Login user with username OR email"""
 
     auth_service = AuthService(db)
-
-    # The username field can contain either username or email
     login_identifier = request.username
 
-    # Check if it looks like an email
+    # Try to authenticate
     if '@' in login_identifier:
-        # Try to authenticate with email
         user = auth_service.authenticate_user_by_email(login_identifier, request.password)
-    else:
-        # Try to authenticate with username
-        user = auth_service.authenticate_user(login_identifier, request.password)
-
-    if not user:
-        # If first attempt failed, try the opposite
-        # (in case someone has @ in their username or email without @)
-        if '@' in login_identifier:
+        if not user:
             user = auth_service.authenticate_user(login_identifier, request.password)
-        else:
+    else:
+        user = auth_service.authenticate_user(login_identifier, request.password)
+        if not user:
             user = auth_service.authenticate_user_by_email(login_identifier, request.password)
 
     if not user:
@@ -106,7 +97,7 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Check if email verification is required
+    # Check email verification
     if settings.EMAIL_VERIFICATION_REQUIRED and not user.is_email_verified:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -119,18 +110,23 @@ async def login(
     # Generate tokens
     tokens = auth_service.create_tokens(user)
 
-    # Add user info to response
-    tokens_dict = tokens.dict() if hasattr(tokens, 'dict') else tokens.__dict__
-    tokens_dict['user'] = {
-        'id': str(user.id),
-        'email': user.email,
-        'username': user.username,
-        'full_name': user.full_name,
-        'role': user.role.value if hasattr(user.role, 'value') else user.role,
-        'company_id': str(user.company_id) if user.company_id else None
+    # THIS IS THE FIX - Return proper response with user object
+    return {
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "token_type": "bearer",
+        "expires_in": 1800,
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "username": user.username,
+            "full_name": user.full_name,
+            "name": user.full_name or user.username,
+            "role": user.role.value if hasattr(user.role, 'value') else user.role,
+            "company_id": str(user.company_id) if user.company_id else None,
+            "company_name": user.company.name if user.company else None
+        }
     }
-
-    return tokens_dict
 
 
 @router.post("/refresh", response_model=TokenResponse)
@@ -153,18 +149,23 @@ async def refresh_token(
     # Generate new tokens
     tokens = auth_service.create_tokens(user)
 
-    # Add user info to response
-    tokens_dict = tokens.dict() if hasattr(tokens, 'dict') else tokens.__dict__
-    tokens_dict['user'] = {
-        'id': str(user.id),
-        'email': user.email,
-        'username': user.username,
-        'full_name': user.full_name,
-        'role': user.role.value if hasattr(user.role, 'value') else user.role,
-        'company_id': str(user.company_id) if user.company_id else None
+    # Return response with user data
+    return {
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "token_type": tokens.token_type,
+        "expires_in": tokens.expires_in,
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "username": user.username,
+            "full_name": user.full_name,
+            "name": user.full_name or user.username,
+            "role": user.role.value if hasattr(user.role, 'value') else user.role,
+            "company_id": str(user.company_id) if user.company_id else None,
+            "company_name": user.company.name if user.company else None
+        }
     }
-
-    return tokens_dict
 
 
 @router.post("/logout")
@@ -314,6 +315,7 @@ async def get_current_user_info(
         'email': current_user.email,
         'username': current_user.username,
         'full_name': current_user.full_name,
+        'name': current_user.full_name or current_user.username,
         'phone': current_user.phone,
         'role': current_user.role.value if hasattr(current_user.role, 'value') else current_user.role,
         'is_email_verified': current_user.is_email_verified,

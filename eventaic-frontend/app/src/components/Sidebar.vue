@@ -35,9 +35,9 @@
           <div class="w-10 h-10 rounded-xl bg-white/10 grid place-items-center">
             <span class="text-xl">👤</span>
           </div>
-          <div class="min-w-0">
-            <div class="font-semibold truncate">{{ userName }}</div>
-            <div class="text-sm text-white/50 truncate">{{ userEmail }}</div>
+          <div class="min-w-0 flex-1">
+            <div class="font-semibold truncate">{{ userData.name }}</div>
+            <div class="text-sm text-white/50 truncate">{{ userData.email }}</div>
           </div>
         </div>
       </RouterLink>
@@ -49,12 +49,12 @@
 </template>
 
 <script setup>
-import {computed} from 'vue'
+import {ref, computed, onMounted, onUnmounted} from 'vue'
 import {RouterLink, useRouter} from 'vue-router'
 import {useAuthStore} from '@/stores/auth'
 
 const router = useRouter()
-const {currentUser, logout} = useAuthStore()
+const authStore = useAuthStore()
 
 const props = defineProps({
   open: {type: Boolean, default: false}
@@ -62,9 +62,63 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-const userName = computed(() => currentUser.value?.name || 'User')
-const userEmail = computed(() => currentUser.value?.email || 'user@example.com')
-const isAdmin = computed(() => currentUser.value?.role === 'admin' || true) // Show admin for demo
+// Reactive user data
+const userData = ref({
+  name: 'User',
+  email: 'user@example.com',
+  role: 'company'
+})
+
+// Load user data from multiple sources
+function loadUserData() {
+  // Try auth store first
+  if (authStore.currentUser?.value) {
+    userData.value = {
+      name: authStore.currentUser.value.full_name || authStore.currentUser.value.name || 'User',
+      email: authStore.currentUser.value.email || 'user@example.com',
+      role: authStore.currentUser.value.role || 'company'
+    }
+    return
+  }
+
+  // Try localStorage
+  try {
+    const storedUser = localStorage.getItem('eventaic:user')
+    if (storedUser) {
+      const user = JSON.parse(storedUser)
+      userData.value = {
+        name: user.full_name || user.name || 'User',
+        email: user.email || 'user@example.com',
+        role: user.role || 'company'
+      }
+      return
+    }
+  } catch (error) {
+    console.error('Error loading user data:', error)
+  }
+
+  // Fallback to default
+  userData.value = {
+    name: 'User',
+    email: 'user@example.com',
+    role: 'company'
+  }
+}
+
+// Listen for user updates
+function handleUserUpdate(event) {
+  if (event.detail) {
+    userData.value = {
+      name: event.detail.full_name || event.detail.name || 'User',
+      email: event.detail.email || 'user@example.com',
+      role: event.detail.role || 'company'
+    }
+  } else {
+    loadUserData()
+  }
+}
+
+const isAdmin = computed(() => userData.value.role === 'super_admin')
 
 const navItems = [
   {to: '/dashboard', label: 'Dashboard', icon: '📊'},
@@ -79,7 +133,38 @@ const adminItems = [
 ]
 
 function handleLogout() {
-  logout()
+  authStore.logout()
   router.push('/auth/login')
 }
+
+// Lifecycle
+onMounted(() => {
+  loadUserData()
+  window.addEventListener('user-updated', handleUserUpdate)
+
+  // Also listen for storage events from other tabs
+  window.addEventListener('storage', (e) => {
+    if (e.key === 'eventaic:user') {
+      loadUserData()
+    }
+  })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('user-updated', handleUserUpdate)
+  window.removeEventListener('storage', loadUserData)
+})
 </script>
+
+<style scoped>
+/* Smooth transitions */
+aside {
+  transition: transform 0.3s ease;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

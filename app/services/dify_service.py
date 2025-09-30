@@ -72,6 +72,67 @@ class DifyService:
             logger.error(f"Dify request failed: {str(e)}")
             raise Exception(f"AI service error: {str(e)}")
 
+    async def generate_image(self, image_prompt: str, ad_context: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """
+        Generate image using Dify based on image prompt
+
+        Args:
+            image_prompt: The prompt for image generation
+            ad_context: Optional context about the ad (event, product, etc.)
+
+        Returns:
+            Image URL from Dify response, or None if generation fails
+        """
+
+        # Build enhanced prompt with context
+        enhanced_prompt = self._build_image_prompt(image_prompt, ad_context)
+
+        prompt = f"""Generate a high-quality advertising image based on this description:
+
+{enhanced_prompt}
+
+Requirements:
+- Professional advertising quality
+- High resolution (1024x1024 or higher)
+- Eye-catching and relevant to the description
+- Brand-safe content
+- Modern design aesthetic
+
+Return ONLY the base64 encoded image data with no additional text or formatting.
+The response should be pure base64 string starting with the image data."""
+
+        payload = {
+            "inputs": {},
+            "query": prompt,
+            "response_mode": "blocking",
+            "user": "image_generation"
+        }
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                        f"{self.base_url}/chat-messages",
+                        headers=self.headers,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=60)  # Longer timeout for image generation
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        logger.error(f"Dify image API error: {response.status} - {error_text}")
+                        raise Exception(f"Dify image API returned status {response.status}")
+
+                    result = await response.json()
+                    logger.info("Dify image response received")
+
+                    return self._parse_image_response(result, image_prompt)
+
+        except aiohttp.ClientError as e:
+            logger.error(f"Dify image connection error: {str(e)}")
+            raise Exception(f"Failed to connect to image service: {str(e)}")
+        except Exception as e:
+            logger.error(f"Dify image request failed: {str(e)}")
+            raise Exception(f"Image generation error: {str(e)}")
+
     async def regenerate_ad(
             self,
             ad_data: Dict[str, Any],
@@ -176,7 +237,7 @@ Please respond with ONLY a valid JSON object (no additional text before or after
     "description": "Compelling description (max 150 characters)",
     "slogan": "Memorable slogan",
     "cta_text": "Call to action",
-    "image_prompt": "Detailed image generation prompt",
+    "image_prompt": "Detailed image generation prompt describing the visual for this ad",
     "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
     "hashtags": ["#hashtag1", "#hashtag2", "#hashtag3", "#hashtag4", "#hashtag5"],
     "platforms": ["google_ads", "meta_ads", "linkedin", "instagram", "tiktok"],
@@ -192,6 +253,26 @@ Please respond with ONLY a valid JSON object (no additional text before or after
 }}
 
 Make the content specific to the event, engaging, and optimized for conversions. Use only valid JSON format."""
+
+    def _build_image_prompt(self, base_prompt: str, ad_context: Optional[Dict[str, Any]] = None) -> str:
+        """Build enhanced image prompt with context"""
+
+        if not ad_context:
+            return base_prompt
+
+        context_parts = []
+        if ad_context.get('event_name'):
+            context_parts.append(f"Event: {ad_context['event_name']}")
+        if ad_context.get('product_categories'):
+            context_parts.append(f"Products: {', '.join(ad_context['product_categories'])}")
+        if ad_context.get('headline'):
+            context_parts.append(f"Theme: {ad_context['headline']}")
+
+        if context_parts:
+            context_str = " | ".join(context_parts)
+            return f"{base_prompt}\n\nContext: {context_str}\n\nStyle: Professional advertising, high-quality, modern, engaging"
+
+        return base_prompt
 
     def _build_regeneration_prompt(
             self,
@@ -287,23 +368,11 @@ Scores should be between 0-10. Consider event relevance, message clarity, persua
 
             if not answer:
                 raise ValueError("Empty response from Dify")
-        except Exception:
-            raise ValueError("Empty response from Dify")
-
-    def _parse_generation_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse Dify generation response - STRICT JSON parsing"""
-
-        try:
-            answer = response.get("answer", "{}").strip()
-
-            if not answer:
-                raise ValueError("Empty response from Dify")
 
             # Log the raw response for debugging
             logger.debug(f"Raw Dify response: {answer[:500]}")
 
             # Try to find JSON in the response
-            # Sometimes LLMs add text before/after JSON
             json_start = answer.find('{')
             json_end = answer.rfind('}')
 
@@ -351,6 +420,95 @@ Scores should be between 0-10. Consider event relevance, message clarity, persua
         except Exception as e:
             logger.error(f"Failed to parse Dify response: {str(e)}")
             raise ValueError(f"Unable to parse AI response: {str(e)}")
+
+    def _parse_image_response(self, response: Dict[str, Any], original_prompt: str) -> Optional[str]:
+        """
+        Parse Dify image response and return image URL
+
+        Dify returns images in the 'files' array with URLs.
+        This method extracts the URL for download.
+
+        Returns:
+            Image URL if found, None otherwise
+        """
+
+        try:
+            # Check for files array in response
+            files = response.get("files", [])
+
+            if files and len(files) > 0:
+                # Get the first file (should be the generated image)
+                first_file = files[0]
+
+                if first_file.get("type") == "image":
+                    image_url = first_file.get("url")
+
+                    if image_url:
+                        logger.info(f"Image URL received from Dify: {image_url[:100]}...")
+                        return image_url
+                    else:
+                        logger.warning("File found but no URL present")
+                else:
+                    logger.warning(f"File type is not image: {first_file.get('type')}")
+            else:
+                logger.warning("No files array in Dify response")
+
+            # No valid image URL found
+            return None
+
+        except Exception as e:
+            logger.error(f"Failed to parse image response: {str(e)}")
+            return None
+
+    def _generate_svg_placeholder(self, prompt: str) -> str:
+        """Generate a high-quality SVG placeholder image"""
+
+        # Extract key words from prompt for the placeholder
+        words = prompt.split()[:5]
+        title = ' '.join(words) if words else 'Ad Image'
+
+        # Create modern gradient colors based on prompt hash
+        prompt_hash = sum(ord(c) for c in prompt)
+        hue1 = (prompt_hash % 360)
+        hue2 = (hue1 + 60) % 360
+
+        svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+            <defs>
+                <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" style="stop-color:hsl({hue1}, 75%, 55%);stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:hsl({hue2}, 75%, 65%);stop-opacity:1" />
+                </linearGradient>
+                <filter id="shadow">
+                    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/>
+                </filter>
+            </defs>
+
+            <!-- Background -->
+            <rect width="1200" height="630" fill="url(#bg)"/>
+
+            <!-- Decorative circles -->
+            <circle cx="150" cy="150" r="80" fill="white" opacity="0.1"/>
+            <circle cx="1050" cy="480" r="100" fill="white" opacity="0.1"/>
+            <circle cx="950" cy="150" r="60" fill="white" opacity="0.15"/>
+
+            <!-- Content -->
+            <g filter="url(#shadow)">
+                <text x="600" y="280" font-family="Arial, sans-serif" font-size="42" font-weight="bold" 
+                      fill="white" text-anchor="middle" opacity="0.95">
+                    {title}
+                </text>
+                <text x="600" y="350" font-family="Arial, sans-serif" font-size="24" 
+                      fill="white" text-anchor="middle" opacity="0.85">
+                    Event-Driven Advertising
+                </text>
+            </g>
+
+            <!-- Brand element -->
+            <rect x="550" y="400" width="100" height="6" rx="3" fill="white" opacity="0.6"/>
+        </svg>'''
+
+        # Encode to base64
+        return base64.b64encode(svg.encode('utf-8')).decode('utf-8')
 
     def _parse_evaluation_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
         """Parse Dify evaluation response - STRICT JSON parsing"""

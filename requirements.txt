@@ -21,6 +21,9 @@ aiosmtplib
 # HTTP Client
 aiohttp
 
+# File Operations
+aiofiles
+
 # Rate Limiting
 slowapi
 

@@ -1,0 +1,8 @@
+[flake8]
+max-line-length = 120
+ignore = E203, E266, E501, W503, W504, E402, E731
+exclude = .git, __pycache__, .venv, venv, alembic/versions, node_modules, static
+max-complexity = 10
+show-source = True
+count = True
+statistics = True

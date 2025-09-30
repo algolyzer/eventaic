@@ -188,7 +188,7 @@
 <script setup>
 import {ref, onMounted} from 'vue'
 import {useRoute, useRouter} from 'vue-router'
-import {api} from '@/services/api'
+import {api, apiLongRunning} from '@/services/api'
 
 const route = useRoute()
 const router = useRouter()
@@ -348,8 +348,10 @@ async function regenerateImage() {
 
   try {
     console.log('🖼️ Regenerating image...')
+    console.log('⏱️ This may take up to 60 seconds...')
 
-    const response = await api.post('/api/v1/ads/regenerate', {
+    // Use apiLongRunning for image generation (2 minute timeout)
+    const response = await apiLongRunning.post('/api/v1/ads/regenerate', {
       ad_id: route.params.id,
       regenerate_image: true
     })

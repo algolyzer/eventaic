@@ -437,31 +437,65 @@ async function createUser() {
   createSuccess.value = ''
 
   try {
+    // Validate inputs
+    if (!newUser.value.email || !newUser.value.username || !newUser.value.full_name || !newUser.value.password) {
+      createError.value = 'Please fill in all required fields'
+      return
+    }
+
     // Validate password
     const password = newUser.value.password
     if (password.length < 8) {
       createError.value = 'Password must be at least 8 characters'
       return
     }
-    if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) ||
-        !/[0-9]/.test(password) || !/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
-      createError.value = 'Password must contain uppercase, lowercase, number, and special character'
+    if (!/[A-Z]/.test(password)) {
+      createError.value = 'Password must contain at least one uppercase letter'
+      return
+    }
+    if (!/[a-z]/.test(password)) {
+      createError.value = 'Password must contain at least one lowercase letter'
+      return
+    }
+    if (!/[0-9]/.test(password)) {
+      createError.value = 'Password must contain at least one number'
+      return
+    }
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+      createError.value = 'Password must contain at least one special character'
       return
     }
 
-    console.log('Creating user:', newUser.value)
+    // Validate username
+    if (newUser.value.username.length < 3 || newUser.value.username.length > 50) {
+      createError.value = 'Username must be 3-50 characters'
+      return
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(newUser.value.username)) {
+      createError.value = 'Username can only contain letters, numbers, underscores and hyphens'
+      return
+    }
+
+    console.log('Creating user with data:', {
+      email: newUser.value.email,
+      username: newUser.value.username,
+      full_name: newUser.value.full_name,
+      company_name: newUser.value.company_name || undefined,
+      phone: newUser.value.phone || undefined,
+      role: newUser.value.role
+    })
 
     const response = await api.post('/api/v1/admin/users', {
       email: newUser.value.email.trim(),
       username: newUser.value.username.trim(),
       full_name: newUser.value.full_name.trim(),
       password: newUser.value.password,
-      company_name: newUser.value.company_name.trim(),
+      company_name: newUser.value.company_name.trim() || undefined,
       phone: newUser.value.phone.trim() || undefined,
       role: newUser.value.role
     })
 
-    console.log('User created:', response.data)
+    console.log('User created successfully:', response.data)
 
     createSuccess.value = 'User created successfully!'
 
@@ -474,17 +508,25 @@ async function createUser() {
     }, 1500)
 
   } catch (error) {
-    console.error('Create user error:', error)
-    console.error('Error details:', {
-      status: error.response?.status,
-      data: error.response?.data
-    })
+    console.error('❌ Create user error:', error)
+    console.error('Error response:', error.response?.data)
+    console.error('Error status:', error.response?.status)
 
     const detail = error.response?.data?.detail
     if (typeof detail === 'string') {
       createError.value = detail
     } else if (Array.isArray(detail)) {
-      createError.value = detail.map(e => e.msg).join(', ')
+      // Pydantic validation errors
+      const errors = detail.map(e => {
+        const field = e.loc?.join('.') || 'field'
+        const msg = e.msg || 'Invalid value'
+        return `${field}: ${msg}`
+      }).join(', ')
+      createError.value = errors
+    } else if (error.response?.data?.message) {
+      createError.value = error.response.data.message
+    } else if (error.message) {
+      createError.value = error.message
     } else {
       createError.value = 'Failed to create user. Please try again.'
     }

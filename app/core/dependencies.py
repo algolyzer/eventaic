@@ -1,13 +1,16 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy.orm import Session
-from jose import JWTError, jwt
-from app.core.database import get_db
-from app.core.config import settings
-from app.models.user import User
-from app.models.enums import UserRole
 from typing import Optional
 import uuid
+
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.database import get_db
+from app.models.enums import UserRole
+from app.models.user import User
+
 
 security_scheme = HTTPBearer()
 

@@ -1,8 +1,10 @@
 from typing import Optional
 from uuid import UUID
+
 from sqlalchemy.orm import Session
-from app.repositories.base import BaseRepository
+
 from app.models.user import User
+from app.repositories.base import BaseRepository
 
 
 class UserRepository(BaseRepository[User]):

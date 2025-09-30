@@ -1,18 +1,21 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import Optional
 from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.dependencies import get_company_user
-from app.models.user import User
 from app.models.enums import AdStatus
-from app.services.ad_service import AdService
+from app.models.user import User
 from app.schemas.company import (
     CompanyDashboardResponse,
-    CompanyUsageResponse,
-    CompanyProfileUpdate,
     CompanyProfileResponse,
+    CompanyProfileUpdate,
+    CompanyUsageResponse,
 )
+from app.services.ad_service import AdService
+
 
 router = APIRouter(prefix="/company", tags=["Company"])
 

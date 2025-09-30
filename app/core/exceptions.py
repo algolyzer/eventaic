@@ -1,5 +1,6 @@
+from typing import Any, Dict, Optional
+
 from fastapi import HTTPException, status
-from typing import Any, Optional, Dict
 
 
 class EventaicException(HTTPException):

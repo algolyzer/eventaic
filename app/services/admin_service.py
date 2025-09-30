@@ -1,16 +1,19 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
-from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+import logging
+from typing import Any, Dict, List, Optional
 from uuid import UUID
-from app.models.user import User
-from app.models.company import Company
+
+from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import Session
+
 from app.models.ad import Ad
-from app.models.enums import UserRole, AdStatus
+from app.models.company import Company
+from app.models.enums import AdStatus, UserRole
+from app.models.user import User
+from app.repositories.ad_repository import AdRepository
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.user_repository import UserRepository
-from app.repositories.ad_repository import AdRepository
-import logging
+
 
 logger = logging.getLogger(__name__)
 

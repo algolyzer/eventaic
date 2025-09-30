@@ -1,17 +1,20 @@
-from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
-from typing import Optional
-from uuid import UUID
-from app.models.user import User
-from app.models.company import Company
-from app.models.enums import UserRole
-from app.schemas.auth import RegisterRequest, TokenResponse
-from app.core.security import Security
-from app.core.config import settings
-from app.repositories.user_repository import UserRepository
-from app.repositories.company_repository import CompanyRepository
 import logging
 import re
+from typing import Optional
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.security import Security
+from app.models.company import Company
+from app.models.enums import UserRole
+from app.models.user import User
+from app.repositories.company_repository import CompanyRepository
+from app.repositories.user_repository import UserRepository
+from app.schemas.auth import RegisterRequest, TokenResponse
+
 
 logger = logging.getLogger(__name__)
 

@@ -1,12 +1,15 @@
-from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any
 from datetime import datetime
-from uuid import UUID
-from app.models.user import User
-from app.models.ad import Ad
-from app.schemas.user import UserProfileUpdate
-from app.repositories.user_repository import UserRepository
 import logging
+from typing import Any, Dict, Optional
+from uuid import UUID
+
+from sqlalchemy.orm import Session
+
+from app.models.ad import Ad
+from app.models.user import User
+from app.repositories.user_repository import UserRepository
+from app.schemas.user import UserProfileUpdate
+
 
 logger = logging.getLogger(__name__)
 

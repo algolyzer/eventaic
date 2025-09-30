@@ -1,9 +1,11 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, Float, Text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
-from app.core.database import Base
 from datetime import datetime
 import uuid
+
+from sqlalchemy import Boolean, Column, DateTime, Float, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+
+from app.core.database import Base
 
 
 class Company(Base):

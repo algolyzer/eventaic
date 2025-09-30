@@ -1,7 +1,9 @@
-from pydantic import BaseModel, Field, field_validator, ConfigDict
-from typing import Optional, List, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
 from app.models.enums import AdStatus, AdType, Platform
 
 

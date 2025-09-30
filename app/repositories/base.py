@@ -1,7 +1,10 @@
-from typing import Generic, TypeVar, Type, Optional, List, Dict, Any
+from typing import Any, Dict, Generic, List, Optional, Type, TypeVar
 from uuid import UUID
+
 from sqlalchemy.orm import Session
+
 from app.core.database import Base
+
 
 ModelType = TypeVar("ModelType", bound=Base)
 

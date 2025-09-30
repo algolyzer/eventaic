@@ -1,10 +1,13 @@
-import aiohttp
 import json
-from typing import Dict, Any, Optional, List
-from app.core.config import settings
-from app.models.enums import AdType
 import logging
 import re
+from typing import Any, Dict, List, Optional
+
+import aiohttp
+
+from app.core.config import settings
+from app.models.enums import AdType
+
 
 logger = logging.getLogger(__name__)
 

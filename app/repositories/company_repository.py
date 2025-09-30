@@ -1,7 +1,9 @@
 from typing import Optional
+
 from sqlalchemy.orm import Session
-from app.repositories.base import BaseRepository
+
 from app.models.company import Company
+from app.repositories.base import BaseRepository
 
 
 class CompanyRepository(BaseRepository[Company]):

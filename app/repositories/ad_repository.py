@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
-from app.repositories.base import BaseRepository
+
 from app.models.ad import Ad
+from app.repositories.base import BaseRepository
 
 
 class AdRepository(BaseRepository[Ad]):

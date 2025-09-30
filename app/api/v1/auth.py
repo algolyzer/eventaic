@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.core.database import get_db
-from app.core.dependencies import get_current_user, get_current_active_user
+from app.core.dependencies import get_current_active_user, get_current_user
+from app.models.user import User
 from app.schemas.auth import *
 from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
-from app.models.user import User
-from app.core.config import settings
-import logging
+
 
 logger = logging.getLogger(__name__)
 

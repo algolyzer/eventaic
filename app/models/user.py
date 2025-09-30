@@ -1,10 +1,12 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Enum, ForeignKey, Text
-from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
-from app.core.database import Base
-from app.models.enums import UserRole
 from datetime import datetime
 import uuid
+
+from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+
+from app.core.database import Base
+from app.models.enums import UserRole
 
 
 class User(Base):

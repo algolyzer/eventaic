@@ -1,28 +1,29 @@
-from fastapi import APIRouter, Depends, Query, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import Optional
 from datetime import datetime, timedelta
+import logging
+from typing import Optional
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.dependencies import get_super_admin
+from app.core.security import Security
+from app.models.ad import Ad
+from app.models.company import Company
 from app.models.user import User
 from app.models.user import User as UserModel
-from app.models.company import Company
-from app.models.ad import Ad
 from app.repositories.user_repository import UserRepository
-from app.services.admin_service import AdminService
 from app.schemas.response import (
     AdminDashboardResponse,
-    CompanyListResponse,
     AdminStatisticsResponse,
     CompanyDetailResponse,
+    CompanyListResponse,
 )
-
 from app.schemas.user import UserCreate
+from app.services.admin_service import AdminService
 from app.services.auth_service import AuthService
-from app.core.security import Security
 
-from uuid import UUID
-import logging
 
 logger = logging.getLogger(__name__)
 

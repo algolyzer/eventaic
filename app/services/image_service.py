@@ -1,8 +1,11 @@
-import aiohttp
 import base64
 import logging
 from typing import Optional
+
+import aiohttp
+
 from app.core.config import settings
+
 
 logger = logging.getLogger(__name__)
 

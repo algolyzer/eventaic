@@ -1,12 +1,14 @@
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from typing import Optional, List
-from app.core.config import settings
-from app.utils.email_templates import EmailTemplates
-import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import logging
+import smtplib
+from typing import List, Optional
+
+from app.core.config import settings
+from app.utils.email_templates import EmailTemplates
+
 
 logger = logging.getLogger(__name__)
 

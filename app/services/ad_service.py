@@ -1,22 +1,25 @@
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func, and_
-from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
+import logging
+from typing import Any, Dict, List, Optional
 from uuid import UUID
-from app.models.ad import Ad, AdEvaluation
-from app.models.company import Company
-from app.models.user import User
-from app.models.enums import AdStatus, AdType
-from app.schemas.ad import AdGenerationRequest, AdResponse, EvaluationResponse
-from app.services.dify_service import DifyService
-from app.repositories.ad_repository import AdRepository
+
+from sqlalchemy import and_, func
+from sqlalchemy.orm import Session, joinedload
+
 from app.core.exceptions import (
-    NotFoundException,
     CompanyLimitException,
     DifyAPIException,
+    NotFoundException,
 )
-from app.utils.image_utils import download_image_from_url, delete_ad_images
-import logging
+from app.models.ad import Ad, AdEvaluation
+from app.models.company import Company
+from app.models.enums import AdStatus, AdType
+from app.models.user import User
+from app.repositories.ad_repository import AdRepository
+from app.schemas.ad import AdGenerationRequest, AdResponse, EvaluationResponse
+from app.services.dify_service import DifyService
+from app.utils.image_utils import delete_ad_images, download_image_from_url
+
 
 logger = logging.getLogger(__name__)
 

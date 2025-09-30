@@ -1,6 +1,6 @@
+from datetime import datetime
 import re
 from typing import Optional
-from datetime import datetime
 
 
 def validate_email(email: str) -> bool:

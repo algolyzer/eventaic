@@ -1,21 +1,23 @@
-from sqlalchemy import (
-    Column,
-    String,
-    Boolean,
-    DateTime,
-    Enum,
-    ForeignKey,
-    Text,
-    JSON,
-    Float,
-    Integer,
-)
-from sqlalchemy.dialects.postgresql import UUID, ARRAY
-from sqlalchemy.orm import relationship
-from app.core.database import Base
-from app.models.enums import AdStatus, AdType, Platform
 from datetime import datetime
 import uuid
+
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.orm import relationship
+
+from app.core.database import Base
+from app.models.enums import AdStatus, AdType, Platform
 
 
 class Ad(Base):

@@ -20,6 +20,11 @@
       <button @click="loadAd" class="btn mt-3">Retry</button>
     </div>
 
+    <!-- Success Message -->
+    <div v-if="successMessage" class="card p-5 border-green-500/20 bg-green-500/5">
+      <p class="text-green-400">✅ {{ successMessage }}</p>
+    </div>
+
     <!-- Ad Content -->
     <div v-else-if="ad" class="space-y-6">
       <!-- Header -->
@@ -47,13 +52,29 @@
           <button @click="regenerateAd" class="btn-ghost border rounded-xl px-4 py-2" :disabled="regenerating">
             {{ regenerating ? 'Regenerating...' : '🔄 Regenerate' }}
           </button>
-          <button @click="regenerateImage" class="btn-ghost border rounded-xl px-4 py-2" :disabled="regenerating">
-            {{ regenerating ? 'Regenerating...' : '🖼️ New Image' }}
+          <button @click="regenerateImage" class="btn-ghost border rounded-xl px-4 py-2" :disabled="regeneratingImage">
+            {{ regeneratingImage ? 'Regenerating Image...' : '🖼️ New Image' }}
           </button>
           <button @click="deleteAd" class="btn-ghost border border-red-500/30 rounded-xl px-4 py-2 hover:bg-red-500/10">
             🗑️ Delete
           </button>
         </div>
+      </div>
+
+      <!-- Ad Image (if exists) -->
+      <div v-if="ad.content?.image_url" class="card p-6">
+        <h2 class="text-xl font-bold mb-4">Ad Image</h2>
+        <div class="rounded-xl overflow-hidden border border-white/10">
+          <img
+              :src="getImageUrl(ad.content.image_url)"
+              :alt="ad.content?.headline || 'Ad image'"
+              class="w-full h-auto"
+              @error="handleImageError"
+          />
+        </div>
+        <p class="text-sm text-white/50 mt-2">
+          {{ ad.content?.image_prompt || 'No image prompt available' }}
+        </p>
       </div>
 
       <!-- Evaluation Score -->
@@ -175,8 +196,10 @@ const router = useRouter()
 const ad = ref(null)
 const loading = ref(true)
 const error = ref('')
+const successMessage = ref('')
 const evaluating = ref(false)
 const regenerating = ref(false)
+const regeneratingImage = ref(false)
 
 function formatPlatform(platform) {
   const platforms = {
@@ -233,15 +256,32 @@ function formatDate(dateStr) {
   }
 }
 
+function getImageUrl(url) {
+  // If URL is already absolute, return as is
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    return url
+  }
+  // Otherwise, prepend the API base URL
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+  return `${baseUrl}${url}`
+}
+
+function handleImageError(event) {
+  console.error('Failed to load image:', event.target.src)
+  event.target.style.display = 'none'
+}
+
 async function loadAd() {
   loading.value = true
   error.value = ''
+  successMessage.value = ''
 
   try {
     const response = await api.get(`/api/v1/ads/${route.params.id}`)
     ad.value = response.data
+    console.log('✅ Ad loaded:', ad.value)
   } catch (err) {
-    console.error('Load ad error:', err)
+    console.error('❌ Load ad error:', err)
     error.value = err.response?.data?.detail || 'Failed to load ad'
   } finally {
     loading.value = false
@@ -251,14 +291,20 @@ async function loadAd() {
 async function evaluateAd() {
   evaluating.value = true
   error.value = ''
+  successMessage.value = ''
 
   try {
+    console.log('🧪 Evaluating ad...')
     await api.post('/api/v1/ads/evaluate', {
       ad_id: route.params.id
     })
 
+    successMessage.value = 'Ad evaluated successfully!'
+
+    // Reload ad to show evaluation results
     await loadAd()
   } catch (err) {
+    console.error('❌ Evaluation error:', err)
     error.value = err.response?.data?.detail || 'Failed to evaluate ad'
   } finally {
     evaluating.value = false
@@ -270,15 +316,23 @@ async function regenerateAd() {
 
   regenerating.value = true
   error.value = ''
+  successMessage.value = ''
 
   try {
+    console.log('🔄 Regenerating ad...')
     const response = await api.post('/api/v1/ads/regenerate', {
       ad_id: route.params.id,
       regenerate_image: false
     })
 
-    router.push(`/ads/${response.data.id}`)
+    successMessage.value = 'Ad regenerated successfully!'
+
+    // Navigate to the new ad
+    setTimeout(() => {
+      router.push(`/ads/${response.data.id}`)
+    }, 1000)
   } catch (err) {
+    console.error('❌ Regeneration error:', err)
     error.value = err.response?.data?.detail || 'Failed to regenerate ad'
   } finally {
     regenerating.value = false
@@ -288,20 +342,40 @@ async function regenerateAd() {
 async function regenerateImage() {
   if (!confirm('This will generate a new image for this ad. Continue?')) return
 
-  regenerating.value = true
+  regeneratingImage.value = true
   error.value = ''
+  successMessage.value = ''
 
   try {
-    await api.post('/api/v1/ads/regenerate', {
+    console.log('🖼️ Regenerating image...')
+
+    const response = await api.post('/api/v1/ads/regenerate', {
       ad_id: route.params.id,
       regenerate_image: true
     })
 
+    console.log('✅ Image regeneration response:', response.data)
+
+    successMessage.value = 'Image regenerated successfully!'
+
+    // Reload ad to show new image
     await loadAd()
+
+    // Clear success message after 3 seconds
+    setTimeout(() => {
+      successMessage.value = ''
+    }, 3000)
+
   } catch (err) {
-    error.value = err.response?.data?.detail || 'Failed to regenerate image'
+    console.error('❌ Image regeneration error:', err)
+    console.error('Error details:', {
+      status: err.response?.status,
+      data: err.response?.data,
+      message: err.message
+    })
+    error.value = err.response?.data?.detail || err.message || 'Failed to regenerate image'
   } finally {
-    regenerating.value = false
+    regeneratingImage.value = false
   }
 }
 
@@ -309,9 +383,17 @@ async function deleteAd() {
   if (!confirm('Are you sure you want to delete this ad? This action cannot be undone.')) return
 
   try {
+    console.log('🗑️ Deleting ad...')
     await api.delete(`/api/v1/ads/${route.params.id}`)
-    router.push('/ads')
+
+    successMessage.value = 'Ad deleted successfully!'
+
+    // Navigate back to ads list after brief delay
+    setTimeout(() => {
+      router.push('/ads')
+    }, 1000)
   } catch (err) {
+    console.error('❌ Delete error:', err)
     error.value = err.response?.data?.detail || 'Failed to delete ad'
   }
 }
@@ -333,5 +415,11 @@ onMounted(() => {
   50% {
     opacity: .5;
   }
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 </style>

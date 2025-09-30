@@ -2,9 +2,19 @@ import axios from 'axios'
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
+// Default API client with standard timeout
 export const api = axios.create({
     baseURL: BASE_URL,
-    timeout: 10000, // 10 second timeout
+    timeout: 30000, // Increased to 30 seconds for normal requests
+    headers: {
+        'Content-Type': 'application/json'
+    }
+})
+
+// Special API client for long-running operations (image generation, etc.)
+export const apiLongRunning = axios.create({
+    baseURL: BASE_URL,
+    timeout: 120000, // 2 minutes for image generation and heavy operations
     headers: {
         'Content-Type': 'application/json'
     }
@@ -13,107 +23,119 @@ export const api = axios.create({
 // Track retry attempts to prevent infinite loops
 const retryTracker = new Map()
 
-// Request interceptor
-api.interceptors.request.use(
-    (config) => {
-        const token = getToken()
-        if (token) {
-            config.headers['Authorization'] = `Bearer ${token}`
-        }
+// Request interceptor for both clients
+function setupInterceptors(client) {
+    client.interceptors.request.use(
+        (config) => {
+            const token = getToken()
+            if (token) {
+                config.headers['Authorization'] = `Bearer ${token}`
+            }
 
-        // Add request ID for tracking
-        config.requestId = `${config.url}_${Date.now()}`
+            // Add request ID for tracking
+            config.requestId = `${config.url}_${Date.now()}`
 
-        return config
-    },
-    (error) => {
-        console.error('Request error:', error)
-        return Promise.reject(error)
-    }
-)
-
-// Response interceptor with retry limit
-api.interceptors.response.use(
-    (response) => {
-        // Clear retry count on success
-        if (response.config.requestId) {
-            retryTracker.delete(response.config.requestId)
-        }
-        return response
-    },
-    async (error) => {
-        const originalRequest = error.config
-
-        // If no config, just reject
-        if (!originalRequest) {
+            return config
+        },
+        (error) => {
+            console.error('Request error:', error)
             return Promise.reject(error)
         }
+    )
 
-        // Track retry attempts
-        const requestId = originalRequest.requestId || 'unknown'
-        const retryCount = retryTracker.get(requestId) || 0
+    // Response interceptor with retry limit
+    client.interceptors.response.use(
+        (response) => {
+            // Clear retry count on success
+            if (response.config.requestId) {
+                retryTracker.delete(response.config.requestId)
+            }
+            return response
+        },
+        async (error) => {
+            const originalRequest = error.config
 
-        // Max 2 retry attempts
-        if (retryCount >= 2) {
-            retryTracker.delete(requestId)
-            console.error('Max retries reached for:', originalRequest.url)
-            return Promise.reject(error)
-        }
+            // If no config, just reject
+            if (!originalRequest) {
+                return Promise.reject(error)
+            }
 
-        // Handle 401 errors (unauthorized)
-        if (error.response?.status === 401 && !originalRequest._retry) {
-            originalRequest._retry = true
-            retryTracker.set(requestId, retryCount + 1)
+            // Track retry attempts
+            const requestId = originalRequest.requestId || 'unknown'
+            const retryCount = retryTracker.get(requestId) || 0
 
-            // Try to refresh token only once
-            const refreshToken = localStorage.getItem('eventaic:refresh_token')
-            if (refreshToken && retryCount === 0) {
-                try {
-                    const response = await axios.post(
-                        `${BASE_URL}/api/v1/auth/refresh`,
-                        {refresh_token: refreshToken},
-                        {timeout: 5000}
-                    )
+            // Max 2 retry attempts
+            if (retryCount >= 2) {
+                retryTracker.delete(requestId)
+                console.error('Max retries reached for:', originalRequest.url)
+                return Promise.reject(error)
+            }
 
-                    const {access_token, user} = response.data
-                    setAuth(access_token, user)
+            // Handle 401 errors (unauthorized)
+            if (error.response?.status === 401 && !originalRequest._retry) {
+                originalRequest._retry = true
+                retryTracker.set(requestId, retryCount + 1)
 
-                    // Retry original request with new token
-                    originalRequest.headers['Authorization'] = `Bearer ${access_token}`
-                    return api(originalRequest)
-                } catch (refreshError) {
-                    console.error('Token refresh failed:', refreshError)
+                // Try to refresh token only once
+                const refreshToken = localStorage.getItem('eventaic:refresh_token')
+                if (refreshToken && retryCount === 0) {
+                    try {
+                        const response = await axios.post(
+                            `${BASE_URL}/api/v1/auth/refresh`,
+                            {refresh_token: refreshToken},
+                            {timeout: 5000}
+                        )
+
+                        const {access_token, user} = response.data
+                        setAuth(access_token, user)
+
+                        // Retry original request with new token
+                        originalRequest.headers['Authorization'] = `Bearer ${access_token}`
+                        return client(originalRequest)
+                    } catch (refreshError) {
+                        console.error('Token refresh failed:', refreshError)
+                        clearAuth()
+
+                        // Only redirect if not already on login page
+                        if (!window.location.pathname.includes('/auth/login')) {
+                            window.location.href = '/app/auth/login?message=Session expired'
+                        }
+                        return Promise.reject(refreshError)
+                    }
+                } else {
+                    // No refresh token or already retried
                     clearAuth()
 
                     // Only redirect if not already on login page
                     if (!window.location.pathname.includes('/auth/login')) {
-                        window.location.href = '/app/auth/login?message=Session expired'
+                        window.location.href = '/app/auth/login'
                     }
-                    return Promise.reject(refreshError)
+                    return Promise.reject(error)
                 }
-            } else {
-                // No refresh token or already retried
-                clearAuth()
-
-                // Only redirect if not already on login page
-                if (!window.location.pathname.includes('/auth/login')) {
-                    window.location.href = '/app/auth/login'
-                }
-                return Promise.reject(error)
             }
-        }
 
-        // Handle network errors
-        if (!error.response) {
-            console.error('Network error:', error.message)
-            return Promise.reject(new Error('Network error. Please check your connection.'))
-        }
+            // Handle network errors
+            if (!error.response) {
+                console.error('Network error:', error.message)
+                return Promise.reject(new Error('Network error. Please check your connection.'))
+            }
 
-        // Handle other errors
-        const message = error.response?.data?.detail || error.message || 'Request failed'
-        return Promise.reject(new Error(message))
-    }
-)
+            // Handle timeout errors specifically
+            if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+                console.error('Request timeout:', originalRequest.url)
+                return Promise.reject(new Error('Request timed out. The operation is taking longer than expected. Please try again.'))
+            }
+
+            // Handle other errors
+            const message = error.response?.data?.detail || error.message || 'Request failed'
+            return Promise.reject(new Error(message))
+        }
+    )
+}
+
+// Setup interceptors for both clients
+setupInterceptors(api)
+setupInterceptors(apiLongRunning)
 
 // Local storage helpers
 const TOKEN_KEY = 'eventaic:token'
@@ -158,9 +180,7 @@ export async function login(credentials) {
             password: credentials.password
         }
 
-        const response = await api.post('/api/v1/auth/login', payload, {
-            timeout: 10000 // 10 second timeout
-        })
+        const response = await api.post('/api/v1/auth/login', payload)
 
         const {access_token, refresh_token, user} = response.data
 
@@ -178,9 +198,7 @@ export async function login(credentials) {
 
 export async function register(data) {
     try {
-        const response = await api.post('/api/v1/auth/register', data, {
-            timeout: 10000
-        })
+        const response = await api.post('/api/v1/auth/register', data)
 
         const {access_token, refresh_token, user} = response.data
 
@@ -208,24 +226,18 @@ export async function logout() {
 }
 
 export async function forgotPassword(data) {
-    return await api.post('/api/v1/auth/password-reset/request', data, {
-        timeout: 10000
-    })
+    return await api.post('/api/v1/auth/password-reset/request', data)
 }
 
 export async function resetPassword(token, newPassword) {
     return await api.post('/api/v1/auth/password-reset/confirm', {
         token,
         new_password: newPassword
-    }, {
-        timeout: 10000
     })
 }
 
 export async function verifyEmail(token) {
-    return await api.post('/api/v1/auth/verify-email', {token}, {
-        timeout: 10000
-    })
+    return await api.post('/api/v1/auth/verify-email', {token})
 }
 
 export async function getCurrentUser() {

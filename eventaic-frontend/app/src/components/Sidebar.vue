@@ -39,8 +39,8 @@
             <span class="text-xl">👤</span>
           </div>
           <div class="min-w-0 flex-1">
-            <div class="font-semibold truncate text-sm">{{ userData.name }}</div>
-            <div class="text-xs text-white/50 truncate">{{ userData.email }}</div>
+            <div class="font-semibold truncate text-sm">{{ displayName }}</div>
+            <div class="text-xs text-white/50 truncate">{{ displayEmail }}</div>
           </div>
         </div>
       </RouterLink>
@@ -53,11 +53,13 @@
 </template>
 
 <script setup>
-import {ref, computed, onMounted, onUnmounted} from 'vue'
-import {RouterLink, useRouter} from 'vue-router'
+import {ref, computed, onMounted, onUnmounted, watch} from 'vue'
+import {RouterLink, useRouter, useRoute} from 'vue-router'
 import {useAuthStore} from '@/stores/auth'
+import {getUser} from '@/services/api'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 
 const props = defineProps({
@@ -67,54 +69,23 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 
 const userData = ref({
-  name: 'User',
-  email: 'user@example.com',
+  name: 'Loading...',
+  email: 'loading@example.com',
   role: 'company'
 })
 
-function loadUserData() {
-  if (authStore.currentUser?.value) {
-    userData.value = {
-      name: authStore.currentUser.value.full_name || authStore.currentUser.value.name || 'User',
-      email: authStore.currentUser.value.email || 'user@example.com',
-      role: authStore.currentUser.value.role || 'company'
-    }
-    return
-  }
+const isLoading = ref(true)
 
-  try {
-    const storedUser = localStorage.getItem('eventaic:user')
-    if (storedUser) {
-      const user = JSON.parse(storedUser)
-      userData.value = {
-        name: user.full_name || user.name || 'User',
-        email: user.email || 'user@example.com',
-        role: user.role || 'company'
-      }
-      return
-    }
-  } catch (error) {
-    console.error('Error loading user data:', error)
-  }
+// Computed properties for display
+const displayName = computed(() => {
+  if (isLoading.value) return 'Loading...'
+  return userData.value.name || 'User'
+})
 
-  userData.value = {
-    name: 'User',
-    email: 'user@example.com',
-    role: 'company'
-  }
-}
-
-function handleUserUpdate(event) {
-  if (event.detail) {
-    userData.value = {
-      name: event.detail.full_name || event.detail.name || 'User',
-      email: event.detail.email || 'user@example.com',
-      role: event.detail.role || 'company'
-    }
-  } else {
-    loadUserData()
-  }
-}
+const displayEmail = computed(() => {
+  if (isLoading.value) return 'loading...'
+  return userData.value.email || 'user@example.com'
+})
 
 const isAdmin = computed(() => userData.value.role === 'super_admin')
 
@@ -132,24 +103,157 @@ const adminItems = [
   {to: '/admin/companies', label: 'Companies', icon: '🏢'}
 ]
 
+function loadUserData() {
+  isLoading.value = true
+
+  try {
+    // Priority 1: Get from auth store
+    if (authStore?.currentUser?.value) {
+      const user = authStore.currentUser.value
+      userData.value = {
+        name: user.full_name || user.name || user.username || 'User',
+        email: user.email || 'user@example.com',
+        role: user.role || 'company'
+      }
+      isLoading.value = false
+      console.log('✅ Loaded user from auth store:', userData.value)
+      return
+    }
+
+    // Priority 2: Get from localStorage
+    const storedUser = localStorage.getItem('eventaic:user')
+    if (storedUser) {
+      try {
+        const user = JSON.parse(storedUser)
+        userData.value = {
+          name: user.full_name || user.name || user.username || 'User',
+          email: user.email || 'user@example.com',
+          role: user.role || 'company'
+        }
+        isLoading.value = false
+        console.log('✅ Loaded user from localStorage:', userData.value)
+        return
+      } catch (parseError) {
+        console.error('❌ Error parsing stored user:', parseError)
+      }
+    }
+
+    // Priority 3: Get from API
+    const currentUser = getUser()
+    if (currentUser) {
+      userData.value = {
+        name: currentUser.full_name || currentUser.name || currentUser.username || 'User',
+        email: currentUser.email || 'user@example.com',
+        role: currentUser.role || 'company'
+      }
+      isLoading.value = false
+      console.log('✅ Loaded user from API helper:', userData.value)
+      return
+    }
+
+  } catch (error) {
+    console.error('❌ Error loading user data:', error)
+  } finally {
+    isLoading.value = false
+  }
+
+  // Fallback: Set default values
+  console.warn('⚠️ Using default user data')
+  userData.value = {
+    name: 'User',
+    email: 'user@example.com',
+    role: 'company'
+  }
+}
+
+function handleUserUpdate(event) {
+  console.log('🔄 User update event received:', event.detail)
+
+  if (event.detail) {
+    userData.value = {
+      name: event.detail.full_name || event.detail.name || event.detail.username || 'User',
+      email: event.detail.email || 'user@example.com',
+      role: event.detail.role || 'company'
+    }
+
+    // Also update auth store
+    if (authStore && authStore.updateUser) {
+      authStore.updateUser(event.detail)
+    }
+
+    console.log('✅ User data updated:', userData.value)
+  } else {
+    loadUserData()
+  }
+}
+
+function handleStorageChange(e) {
+  if (e.key === 'eventaic:user' && e.newValue) {
+    console.log('🔄 Storage changed, reloading user data')
+    loadUserData()
+  }
+}
+
 function handleLogout() {
+  console.log('🚪 Logging out...')
   authStore.logout()
+
+  // Clear all user data
+  userData.value = {
+    name: 'User',
+    email: 'user@example.com',
+    role: 'company'
+  }
+
   router.push('/auth/login')
 }
 
-onMounted(() => {
-  loadUserData()
-  window.addEventListener('user-updated', handleUserUpdate)
-  window.addEventListener('storage', (e) => {
-    if (e.key === 'eventaic:user') {
-      loadUserData()
+// Watch for auth store changes
+watch(
+    () => authStore?.currentUser?.value,
+    (newUser) => {
+      if (newUser) {
+        console.log('🔄 Auth store user changed:', newUser)
+        userData.value = {
+          name: newUser.full_name || newUser.name || newUser.username || 'User',
+          email: newUser.email || 'user@example.com',
+          role: newUser.role || 'company'
+        }
+      }
+    },
+    {deep: true}
+)
+
+// Watch for route changes (in case we need to reload)
+watch(
+    () => route.path,
+    () => {
+      // Reload user data on certain routes
+      if (route.path === '/profile' || route.path === '/dashboard') {
+        loadUserData()
+      }
     }
-  })
+)
+
+onMounted(() => {
+  console.log('🚀 Sidebar mounted, loading user data...')
+
+  // Load user data immediately
+  loadUserData()
+
+  // Set up event listeners
+  window.addEventListener('user-updated', handleUserUpdate)
+  window.addEventListener('storage', handleStorageChange)
+
+  // Also listen for login events
+  window.addEventListener('user-logged-in', loadUserData)
 })
 
 onUnmounted(() => {
+  console.log('👋 Sidebar unmounting, cleaning up listeners')
   window.removeEventListener('user-updated', handleUserUpdate)
-  window.removeEventListener('storage', loadUserData)
+  window.removeEventListener('storage', handleStorageChange)
+  window.removeEventListener('user-logged-in', loadUserData)
 })
 </script>
 
@@ -185,5 +289,19 @@ nav {
   .text-xs {
     font-size: 0.75rem;
   }
+}
+
+/* Loading animation */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.loading {
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 </style>

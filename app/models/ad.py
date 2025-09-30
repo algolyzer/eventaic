@@ -28,12 +28,12 @@ class Ad(Base):
 
     # Image
     image_prompt = Column(Text)
-    image_base64 = Column(Text)  # Store base64 encoded image
-    image_url = Column(String(500))  # Alternative: store URL if uploaded elsewhere
+    image_base64 = Column(Text)
+    image_url = Column(String(500))
 
     # Platform recommendations
     platforms = Column(ARRAY(String))
-    platform_details = Column(JSON)  # Store detailed platform-specific recommendations
+    platform_details = Column(JSON)
     recommended_posting_times = Column(ARRAY(String))
     budget_allocation = Column(JSON)
 
@@ -60,12 +60,15 @@ class Ad(Base):
     # Self-referential relationship for regenerations
     parent_ad = relationship("Ad", remote_side=[id], backref="regenerations")
 
+    # FIXED: Cascade delete evaluations when ad is deleted
+    evaluations = relationship("AdEvaluation", back_populates="ad", cascade="all, delete-orphan")
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Dify response storage
-    dify_response = Column(JSON)  # Store complete Dify response for reference
+    dify_response = Column(JSON)
 
     def __repr__(self):
         return f"<Ad {self.id} - {self.event_name}>"
@@ -75,7 +78,7 @@ class AdEvaluation(Base):
     __tablename__ = "ad_evaluations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    ad_id = Column(UUID(as_uuid=True), ForeignKey("ads.id"), nullable=False)
+    ad_id = Column(UUID(as_uuid=True), ForeignKey("ads.id", ondelete="CASCADE"), nullable=False)
 
     # Evaluation scores
     relevance_score = Column(Float)
@@ -95,5 +98,5 @@ class AdEvaluation(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Relationships
-    ad = relationship("Ad", backref="evaluations")
+    # Relationships - FIXED: back_populates instead of backref
+    ad = relationship("Ad", back_populates="evaluations")

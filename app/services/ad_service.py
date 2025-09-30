@@ -159,9 +159,10 @@ class AdService:
 
         if regenerate_image:
             # Only regenerate the image
-            logger.info(f"Regenerating image only for ad {original_ad.id}")
+            logger.info(f"🖼️ Regenerating image only for ad {original_ad.id}")
 
             if not original_ad.image_prompt:
+                logger.error(f"❌ No image prompt available for ad {original_ad.id}")
                 raise ValueError("No image prompt available for regeneration")
 
             try:
@@ -172,41 +173,59 @@ class AdService:
                     'description': original_ad.description
                 }
 
+                logger.info(f"📝 Image prompt: {original_ad.image_prompt[:100]}...")
+                logger.info(f"🎯 Context: {image_context}")
+
                 # Get new image URL from Dify
+                logger.info("🚀 Calling Dify image generation...")
                 image_url = await self.dify_service.generate_image(
                     image_prompt=original_ad.image_prompt,
                     ad_context=image_context
                 )
 
-                if image_url:
-                    # Download and save the new image
-                    result = await download_image_from_url(
-                        url=image_url,
-                        ad_id=original_ad.id,
-                        original_filename=None
-                    )
+                if not image_url:
+                    logger.error("❌ Dify returned no image URL")
+                    raise ValueError("Failed to generate image: No URL returned from Dify")
 
-                    if result:
-                        filename, public_url = result
-                        original_ad.image_url = public_url
-                        original_ad.regeneration_count += 1
-                        original_ad.updated_at = datetime.utcnow()
-                        self.db.commit()
-                        self.db.refresh(original_ad)
-                        logger.info(f"Image regenerated successfully for ad {original_ad.id}")
-                    else:
-                        raise ValueError("Failed to download regenerated image")
-                else:
-                    raise ValueError("Failed to generate new image URL")
+                logger.info(f"✅ Image URL received: {image_url[:100]}...")
+
+                # Download and save the new image
+                logger.info("⬇️ Downloading image from URL...")
+                result = await download_image_from_url(
+                    url=image_url,
+                    ad_id=original_ad.id,
+                    original_filename=None
+                )
+
+                if not result:
+                    logger.error("❌ Failed to download image from URL")
+                    raise ValueError("Failed to download image from generated URL")
+
+                filename, public_url = result
+                logger.info(f"💾 Image saved successfully!")
+                logger.info(f"   Filename: {filename}")
+                logger.info(f"   Public URL: {public_url}")
+
+                # Update ad with new image
+                original_ad.image_url = public_url
+                original_ad.regeneration_count += 1
+                original_ad.updated_at = datetime.utcnow()
+
+                self.db.commit()
+                self.db.refresh(original_ad)
+
+                logger.info(f"✅ Image regenerated successfully for ad {original_ad.id}")
 
             except Exception as e:
-                logger.error(f"Failed to regenerate image: {str(e)}")
+                logger.error(f"💥 Failed to regenerate image: {str(e)}")
+                logger.exception("Full traceback:")
+                self.db.rollback()
                 raise DifyAPIException(f"Unable to regenerate image: {str(e)}")
 
             return self._format_ad_response(original_ad)
 
         # Regenerate entire ad
-        logger.info(f"Regenerating entire ad based on {original_ad.id}")
+        logger.info(f"🔄 Regenerating entire ad based on {original_ad.id}")
 
         ad_data = {
             'event_name': original_ad.event_name,
@@ -223,9 +242,9 @@ class AdService:
                 regenerate_image=False,
                 additional_instructions=additional_instructions
             )
-            logger.info("Ad content regenerated successfully")
+            logger.info("✅ Ad content regenerated successfully")
         except Exception as e:
-            logger.error(f"Failed to regenerate ad content: {str(e)}")
+            logger.error(f"💥 Failed to regenerate ad content: {str(e)}")
             raise DifyAPIException(f"Unable to regenerate ad: {str(e)}")
 
         # Create new ad version
@@ -260,7 +279,7 @@ class AdService:
         # Generate new image
         if ad.image_prompt:
             try:
-                logger.info(f"Generating image for regenerated ad {ad.id}")
+                logger.info(f"🖼️ Generating image for regenerated ad {ad.id}")
 
                 image_context = {
                     'event_name': ad.event_name,
@@ -269,14 +288,12 @@ class AdService:
                     'description': ad.description
                 }
 
-                # Get image URL from Dify
                 image_url = await self.dify_service.generate_image(
                     image_prompt=ad.image_prompt,
                     ad_context=image_context
                 )
 
                 if image_url:
-                    # Download and save the image
                     result = await download_image_from_url(
                         url=image_url,
                         ad_id=ad.id,
@@ -286,15 +303,16 @@ class AdService:
                     if result:
                         filename, public_url = result
                         ad.image_url = public_url
-                        logger.info(f"Image generated for regenerated ad {ad.id}")
+                        logger.info(f"✅ Image generated for regenerated ad {ad.id}")
 
             except Exception as e:
-                logger.error(f"Failed to generate image for regenerated ad: {str(e)}")
+                logger.error(f"⚠️ Failed to generate image for regenerated ad: {str(e)}")
+                # Continue without image - not critical
 
         self.db.commit()
         self.db.refresh(ad)
 
-        logger.info(f"Regenerated ad {ad.id} created successfully")
+        logger.info(f"✅ Regenerated ad {ad.id} created successfully")
         return self._format_ad_response(ad)
 
     async def evaluate_ad(self, ad: Ad) -> EvaluationResponse:

@@ -3,18 +3,20 @@
   <div v-if="open" class="fixed inset-0 bg-black/40 z-40 md:hidden" @click="$emit('close')"></div>
 
   <aside :class="[open ? 'translate-x-0' : '-translate-x-full md:translate-x-0']"
-         class="fixed md:static z-50 h-full w-72 border-r border-white/10 bg-black/40 backdrop-blur-xl transition-transform">
+         class="fixed md:static z-50 h-full w-72 border-r border-white/10 bg-black/40 backdrop-blur-xl transition-transform flex flex-col">
 
-    <div class="p-4 flex items-center gap-3 border-b border-white/10">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-violet to-brand-cyan"></div>
+    <!-- Header -->
+    <div class="p-4 flex items-center gap-3 border-b border-white/10 flex-shrink-0">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-brand-violet to-brand-cyan flex-shrink-0"></div>
       <div class="font-extrabold text-xl">Eventaic</div>
     </div>
 
-    <nav class="p-3 space-y-1">
+    <!-- Navigation -->
+    <nav class="p-3 space-y-1 flex-1 overflow-y-auto">
       <RouterLink v-for="item in navItems" :key="item.to" :to="item.to"
                   class="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-transparent hover:bg-white/5 transition-colors"
                   :class="{'bg-white/10 border-white/20': $route.path === item.to}">
-        <span class="text-xl">{{ item.icon }}</span>
+        <span class="text-xl flex-shrink-0">{{ item.icon }}</span>
         <span class="font-medium">{{ item.label }}</span>
       </RouterLink>
 
@@ -23,25 +25,27 @@
         <RouterLink v-for="item in adminItems" :key="item.to" :to="item.to"
                     class="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-transparent hover:bg-white/5 transition-colors"
                     :class="{'bg-white/10 border-white/20': $route.path === item.to}">
-          <span class="text-xl">{{ item.icon }}</span>
+          <span class="text-xl flex-shrink-0">{{ item.icon }}</span>
           <span class="font-medium">{{ item.label }}</span>
         </RouterLink>
       </div>
     </nav>
 
-    <div class="absolute bottom-0 left-0 right-0 p-3">
-      <RouterLink to="/profile" class="block card p-3 hover:bg-white/10 transition">
+    <!-- User Profile Section - Fixed -->
+    <div class="p-3 border-t border-white/10 flex-shrink-0">
+      <RouterLink to="/profile" class="block card p-3 hover:bg-white/10 transition rounded-xl">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-white/10 grid place-items-center">
+          <div class="w-10 h-10 rounded-xl bg-white/10 grid place-items-center flex-shrink-0">
             <span class="text-xl">👤</span>
           </div>
           <div class="min-w-0 flex-1">
-            <div class="font-semibold truncate">{{ userData.name }}</div>
-            <div class="text-sm text-white/50 truncate">{{ userData.email }}</div>
+            <div class="font-semibold truncate text-sm">{{ userData.name }}</div>
+            <div class="text-xs text-white/50 truncate">{{ userData.email }}</div>
           </div>
         </div>
       </RouterLink>
-      <button @click="handleLogout" class="mt-2 w-full btn-ghost rounded-xl py-2.5 hover:bg-white/10 transition">
+      <button @click="handleLogout"
+              class="mt-2 w-full btn-ghost border rounded-xl py-2.5 hover:bg-white/10 transition text-sm">
         Sign Out
       </button>
     </div>
@@ -62,16 +66,13 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 
-// Reactive user data
 const userData = ref({
   name: 'User',
   email: 'user@example.com',
   role: 'company'
 })
 
-// Load user data from multiple sources
 function loadUserData() {
-  // Try auth store first
   if (authStore.currentUser?.value) {
     userData.value = {
       name: authStore.currentUser.value.full_name || authStore.currentUser.value.name || 'User',
@@ -81,7 +82,6 @@ function loadUserData() {
     return
   }
 
-  // Try localStorage
   try {
     const storedUser = localStorage.getItem('eventaic:user')
     if (storedUser) {
@@ -97,7 +97,6 @@ function loadUserData() {
     console.error('Error loading user data:', error)
   }
 
-  // Fallback to default
   userData.value = {
     name: 'User',
     email: 'user@example.com',
@@ -105,7 +104,6 @@ function loadUserData() {
   }
 }
 
-// Listen for user updates
 function handleUserUpdate(event) {
   if (event.detail) {
     userData.value = {
@@ -122,6 +120,8 @@ const isAdmin = computed(() => userData.value.role === 'super_admin')
 
 const navItems = [
   {to: '/dashboard', label: 'Dashboard', icon: '📊'},
+  {to: '/ads/generate', label: 'Generate Ad', icon: '✨'},
+  {to: '/ads', label: 'My Ads', icon: '📢'},
   {to: '/company', label: 'Company', icon: '🏢'},
   {to: '/profile', label: 'Profile', icon: '⚙️'}
 ]
@@ -137,12 +137,9 @@ function handleLogout() {
   router.push('/auth/login')
 }
 
-// Lifecycle
 onMounted(() => {
   loadUserData()
   window.addEventListener('user-updated', handleUserUpdate)
-
-  // Also listen for storage events from other tabs
   window.addEventListener('storage', (e) => {
     if (e.key === 'eventaic:user') {
       loadUserData()
@@ -157,7 +154,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Smooth transitions */
 aside {
   transition: transform 0.3s ease;
 }
@@ -166,5 +162,28 @@ aside {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Ensure proper flexbox layout */
+aside {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Prevent text overlap */
+nav {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Better responsive text */
+@media (max-width: 768px) {
+  .font-semibold {
+    font-size: 0.875rem;
+  }
+
+  .text-xs {
+    font-size: 0.75rem;
+  }
 }
 </style>

@@ -48,63 +48,75 @@ class AuthService:
     async def create_user(self, request: RegisterRequest) -> User:
         """Create new user with optional company - with enhanced security"""
 
-        # Sanitize inputs
-        email = self._sanitize_input(request.email.lower())
-        username = self._sanitize_input(request.username)
-        full_name = self._sanitize_input(request.full_name) if request.full_name else None
-        company_name = self._sanitize_input(request.company_name)  # Always required now
+        try:
+            # Sanitize inputs
+            email = self._sanitize_input(request.email.lower())
+            username = self._sanitize_input(request.username)
+            full_name = self._sanitize_input(request.full_name) if request.full_name else None
+            company_name = self._sanitize_input(request.company_name)  # Always required now
 
-        # Validate formats
-        if not self._validate_email_format(email):
-            raise ValueError("Invalid email format")
+            # Validate formats
+            if not self._validate_email_format(email):
+                raise ValueError("Invalid email format")
 
-        if not self._validate_username_format(username):
-            raise ValueError("Username must be 3-50 characters, alphanumeric with _ or - only")
+            if not self._validate_username_format(username):
+                raise ValueError("Username must be 3-50 characters, alphanumeric with _ or - only")
 
-        # Check if user already exists
-        if self.user_repository.get_by_email(email):
-            raise ValueError("Email already registered")
+            # Check if user already exists
+            if self.user_repository.get_by_email(email):
+                raise ValueError("Email already registered")
 
-        if self.user_repository.get_by_username(username):
-            raise ValueError("Username already taken")
+            if self.user_repository.get_by_username(username):
+                raise ValueError("Username already taken")
 
-        # Hash password
-        hashed_password = self.security.get_password_hash(request.password)
+            # Hash password
+            hashed_password = self.security.get_password_hash(request.password)
 
-        # Always create or get company for regular registration
-        company = self.company_repository.get_by_name(company_name)
-        if not company:
-            company = Company(
-                name=company_name,
-                email=email
+            # Always create or get company for regular registration
+            company = self.company_repository.get_by_name(company_name)
+            if not company:
+                company = Company(
+                    name=company_name,
+                    email=email
+                )
+                self.db.add(company)
+                self.db.flush()
+                logger.info(f"New company created: {company.name}")
+
+            # Create user - always COMPANY role for public registration
+            user = User(
+                email=email,
+                username=username,
+                full_name=full_name,
+                phone=self._sanitize_input(request.phone) if request.phone else None,
+                hashed_password=hashed_password,
+                role=UserRole.COMPANY,  # Always COMPANY for public registration
+                company_id=company.id,
+                is_email_verified=not settings.EMAIL_VERIFICATION_REQUIRED
             )
-            self.db.add(company)
-            self.db.flush()
 
-        # Create user - always COMPANY role for public registration
-        user = User(
-            email=email,
-            username=username,
-            full_name=full_name,
-            phone=self._sanitize_input(request.phone) if request.phone else None,
-            hashed_password=hashed_password,
-            role=UserRole.COMPANY,  # Always COMPANY for public registration
-            company_id=company.id,
-            is_email_verified=not settings.EMAIL_VERIFICATION_REQUIRED
-        )
+            # Generate email verification token if required
+            if settings.EMAIL_VERIFICATION_REQUIRED:
+                verification_token = self.security.generate_token()
+                user.email_verification_token = self.security.hash_token(verification_token)
+                user.email_verification_sent_at = datetime.utcnow()
 
-        # Generate email verification token if required
-        if settings.EMAIL_VERIFICATION_REQUIRED:
-            verification_token = self.security.generate_token()
-            user.email_verification_token = self.security.hash_token(verification_token)
-            user.email_verification_sent_at = datetime.utcnow()
+            self.db.add(user)
+            self.db.commit()
+            self.db.refresh(user)
 
-        self.db.add(user)
-        self.db.commit()
-        self.db.refresh(user)
+            logger.info(f"New user created: {user.id} ({user.email}) for company {company.name}")
+            return user
 
-        logger.info(f"New user created: {user.id} ({user.email})")
-        return user
+        except ValueError as e:
+            # Re-raise validation errors
+            logger.warning(f"User creation validation failed: {str(e)}")
+            raise
+        except Exception as e:
+            # Rollback on any error
+            self.db.rollback()
+            logger.error(f"User creation failed: {str(e)}")
+            raise ValueError(f"Failed to create user: {str(e)}")
 
     def authenticate_user(self, username: str, password: str) -> Optional[User]:
         """Authenticate user by username - with enhanced security"""

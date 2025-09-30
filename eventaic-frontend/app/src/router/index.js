@@ -40,6 +40,28 @@ const routes = [
         component: () => import('@/pages/CompanyProfile.vue'),
         meta: {requiresAuth: true}
     },
+
+    // Ads routes
+    {
+        path: '/ads',
+        name: 'ads',
+        component: () => import('@/pages/AdsList.vue'),
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/ads/generate',
+        name: 'generate-ad',
+        component: () => import('@/pages/GenerateAd.vue'),
+        meta: {requiresAuth: true}
+    },
+    {
+        path: '/ads/:id',
+        name: 'ad-detail',
+        component: () => import('@/pages/AdDetail.vue'),
+        meta: {requiresAuth: true}
+    },
+
+    // Admin routes
     {
         path: '/admin',
         name: 'admin',

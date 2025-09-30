@@ -15,6 +15,7 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8)
     company_id: Optional[UUID] = None
+    company_name: Optional[str] = None
     role: UserRole = UserRole.COMPANY
 
 

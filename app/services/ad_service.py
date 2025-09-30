@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func, and_
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from uuid import UUID
@@ -11,26 +11,39 @@ from app.schemas.ad import AdGenerationRequest, AdResponse, EvaluationResponse
 from app.services.dify_service import DifyService
 from app.repositories.ad_repository import AdRepository
 from app.core.exceptions import NotFoundException, CompanyLimitException, DifyAPIException
+from app.utils.image_utils import download_image_from_url, delete_ad_images
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 class AdService:
+    """Service for ad generation, evaluation, and management"""
+
     def __init__(self, db: Session):
         self.db = db
         self.ad_repository = AdRepository(db)
         self.dify_service = DifyService()
 
     async def generate_ad(self, user: User, request: AdGenerationRequest) -> AdResponse:
-        """Generate new ad"""
+        """
+        Generate new ad with content and image
+
+        Flow:
+        1. Check company limit
+        2. Generate ad content via Dify
+        3. Create ad record
+        4. Generate image via Dify using the image_prompt
+        5. Save everything
+        """
 
         # Check company limit
         if not self.check_generation_limit(user.company_id):
             raise CompanyLimitException("Monthly ad generation limit reached")
 
-        # Call Dify to generate ad
+        # Step 1: Generate ad content
         try:
+            logger.info(f"Generating ad content for event: {request.event_name}")
             dify_response = await self.dify_service.generate_ad(
                 event_name=request.event_name,
                 product_categories=request.product_categories,
@@ -38,11 +51,12 @@ class AdService:
                 location=request.location,
                 product_name=request.product_name
             )
+            logger.info("Ad content generated successfully")
         except Exception as e:
-            logger.error(f"Failed to generate ad via Dify: {str(e)}")
-            raise DifyAPIException(f"Unable to connect to AI service. Please try again later. Error: {str(e)}")
+            logger.error(f"Failed to generate ad content: {str(e)}")
+            raise DifyAPIException(f"Unable to generate ad content: {str(e)}")
 
-        # Create ad record
+        # Step 2: Create ad record with content
         ad = Ad(
             event_name=request.event_name,
             product_name=request.product_name,
@@ -55,7 +69,6 @@ class AdService:
             keywords=dify_response.get('keywords', []),
             hashtags=dify_response.get('hashtags', []),
             image_prompt=dify_response.get('image_prompt'),
-            image_base64=dify_response.get('image_base64'),
             platforms=dify_response.get('platforms', []),
             platform_details=dify_response.get('platform_details', {}),
             recommended_posting_times=dify_response.get('posting_times', []),
@@ -68,15 +81,63 @@ class AdService:
         )
 
         self.db.add(ad)
+        self.db.flush()  # Get the ad ID
 
-        # Update company counters
+        # Step 3: Generate image using Dify
+        if ad.image_prompt:
+            try:
+                logger.info(f"Generating image for ad {ad.id} with prompt: {ad.image_prompt[:100]}...")
+
+                # Prepare context for better image generation
+                image_context = {
+                    'event_name': ad.event_name,
+                    'product_categories': ad.product_categories,
+                    'headline': ad.headline,
+                    'description': ad.description
+                }
+
+                # Get image URL from Dify
+                image_url = await self.dify_service.generate_image(
+                    image_prompt=ad.image_prompt,
+                    ad_context=image_context
+                )
+
+                if image_url:
+                    logger.info(f"Image URL received for ad {ad.id}: {image_url[:100]}...")
+
+                    # Download and save the image
+                    result = await download_image_from_url(
+                        url=image_url,
+                        ad_id=ad.id,
+                        original_filename=None  # Will auto-generate from hash
+                    )
+
+                    if result:
+                        filename, public_url = result
+                        ad.image_url = public_url
+                        logger.info(f"Image saved successfully for ad {ad.id}: {public_url}")
+                    else:
+                        logger.warning(f"Failed to download image for ad {ad.id}")
+                else:
+                    logger.warning(f"No image URL received for ad {ad.id}")
+
+            except Exception as e:
+                logger.error(f"Failed to generate image for ad {ad.id}: {str(e)}")
+                # Continue without image - not critical for ad creation
+        else:
+            logger.warning(f"No image prompt provided for ad {ad.id}")
+
+        # Step 4: Update company counters
         company = self.db.query(Company).filter(Company.id == user.company_id).first()
-        company.ads_generated_this_month += 1
-        company.total_ads_generated += 1
+        if company:
+            company.ads_generated_this_month += 1
+            company.total_ads_generated += 1
 
+        # Step 5: Commit and return
         self.db.commit()
         self.db.refresh(ad)
 
+        logger.info(f"Ad {ad.id} created successfully with image")
         return self._format_ad_response(ad)
 
     async def regenerate_ad(
@@ -86,7 +147,66 @@ class AdService:
             regenerate_image: bool = False,
             additional_instructions: Optional[str] = None
     ) -> AdResponse:
-        """Regenerate ad or just image"""
+        """
+        Regenerate ad content or just the image
+
+        Args:
+            user: Current user
+            original_ad: Original ad to regenerate from
+            regenerate_image: If True, only regenerate image; if False, regenerate entire ad
+            additional_instructions: Optional instructions for regeneration
+        """
+
+        if regenerate_image:
+            # Only regenerate the image
+            logger.info(f"Regenerating image only for ad {original_ad.id}")
+
+            if not original_ad.image_prompt:
+                raise ValueError("No image prompt available for regeneration")
+
+            try:
+                image_context = {
+                    'event_name': original_ad.event_name,
+                    'product_categories': original_ad.product_categories,
+                    'headline': original_ad.headline,
+                    'description': original_ad.description
+                }
+
+                # Get new image URL from Dify
+                image_url = await self.dify_service.generate_image(
+                    image_prompt=original_ad.image_prompt,
+                    ad_context=image_context
+                )
+
+                if image_url:
+                    # Download and save the new image
+                    result = await download_image_from_url(
+                        url=image_url,
+                        ad_id=original_ad.id,
+                        original_filename=None
+                    )
+
+                    if result:
+                        filename, public_url = result
+                        original_ad.image_url = public_url
+                        original_ad.regeneration_count += 1
+                        original_ad.updated_at = datetime.utcnow()
+                        self.db.commit()
+                        self.db.refresh(original_ad)
+                        logger.info(f"Image regenerated successfully for ad {original_ad.id}")
+                    else:
+                        raise ValueError("Failed to download regenerated image")
+                else:
+                    raise ValueError("Failed to generate new image URL")
+
+            except Exception as e:
+                logger.error(f"Failed to regenerate image: {str(e)}")
+                raise DifyAPIException(f"Unable to regenerate image: {str(e)}")
+
+            return self._format_ad_response(original_ad)
+
+        # Regenerate entire ad
+        logger.info(f"Regenerating entire ad based on {original_ad.id}")
 
         ad_data = {
             'event_name': original_ad.event_name,
@@ -100,54 +220,87 @@ class AdService:
         try:
             dify_response = await self.dify_service.regenerate_ad(
                 ad_data=ad_data,
-                regenerate_image=regenerate_image,
+                regenerate_image=False,
                 additional_instructions=additional_instructions
             )
+            logger.info("Ad content regenerated successfully")
         except Exception as e:
-            logger.error(f"Failed to regenerate ad via Dify: {str(e)}")
-            raise DifyAPIException(f"Unable to connect to AI service. Error: {str(e)}")
+            logger.error(f"Failed to regenerate ad content: {str(e)}")
+            raise DifyAPIException(f"Unable to regenerate ad: {str(e)}")
 
-        if regenerate_image:
-            original_ad.image_prompt = dify_response.get('image_prompt')
-            original_ad.image_base64 = dify_response.get('image_base64')
-            original_ad.regeneration_count += 1
-            original_ad.updated_at = datetime.utcnow()
-        else:
-            ad = Ad(
-                event_name=original_ad.event_name,
-                product_name=original_ad.product_name,
-                product_categories=original_ad.product_categories,
-                location=original_ad.location,
-                headline=dify_response.get('headline'),
-                description=dify_response.get('description'),
-                slogan=dify_response.get('slogan'),
-                cta_text=dify_response.get('cta_text'),
-                keywords=dify_response.get('keywords', []),
-                hashtags=dify_response.get('hashtags', []),
-                image_prompt=dify_response.get('image_prompt'),
-                image_base64=dify_response.get('image_base64'),
-                platforms=dify_response.get('platforms', []),
-                platform_details=dify_response.get('platform_details', {}),
-                recommended_posting_times=dify_response.get('posting_times', []),
-                budget_allocation=dify_response.get('budget_allocation', {}),
-                status=AdStatus.REGENERATED,
-                ad_type=AdType.REGEN,
-                parent_ad_id=original_ad.id,
-                regeneration_count=original_ad.regeneration_count + 1,
-                company_id=user.company_id,
-                created_by_id=user.id,
-                dify_response=dify_response
-            )
-            self.db.add(ad)
-            original_ad = ad
+        # Create new ad version
+        ad = Ad(
+            event_name=original_ad.event_name,
+            product_name=original_ad.product_name,
+            product_categories=original_ad.product_categories,
+            location=original_ad.location,
+            headline=dify_response.get('headline'),
+            description=dify_response.get('description'),
+            slogan=dify_response.get('slogan'),
+            cta_text=dify_response.get('cta_text'),
+            keywords=dify_response.get('keywords', []),
+            hashtags=dify_response.get('hashtags', []),
+            image_prompt=dify_response.get('image_prompt'),
+            platforms=dify_response.get('platforms', []),
+            platform_details=dify_response.get('platform_details', {}),
+            recommended_posting_times=dify_response.get('posting_times', []),
+            budget_allocation=dify_response.get('budget_allocation', {}),
+            status=AdStatus.REGENERATED,
+            ad_type=AdType.REGEN,
+            parent_ad_id=original_ad.id,
+            regeneration_count=original_ad.regeneration_count + 1,
+            company_id=user.company_id,
+            created_by_id=user.id,
+            dify_response=dify_response
+        )
+
+        self.db.add(ad)
+        self.db.flush()
+
+        # Generate new image
+        if ad.image_prompt:
+            try:
+                logger.info(f"Generating image for regenerated ad {ad.id}")
+
+                image_context = {
+                    'event_name': ad.event_name,
+                    'product_categories': ad.product_categories,
+                    'headline': ad.headline,
+                    'description': ad.description
+                }
+
+                # Get image URL from Dify
+                image_url = await self.dify_service.generate_image(
+                    image_prompt=ad.image_prompt,
+                    ad_context=image_context
+                )
+
+                if image_url:
+                    # Download and save the image
+                    result = await download_image_from_url(
+                        url=image_url,
+                        ad_id=ad.id,
+                        original_filename=None
+                    )
+
+                    if result:
+                        filename, public_url = result
+                        ad.image_url = public_url
+                        logger.info(f"Image generated for regenerated ad {ad.id}")
+
+            except Exception as e:
+                logger.error(f"Failed to generate image for regenerated ad: {str(e)}")
 
         self.db.commit()
-        self.db.refresh(original_ad)
+        self.db.refresh(ad)
 
-        return self._format_ad_response(original_ad)
+        logger.info(f"Regenerated ad {ad.id} created successfully")
+        return self._format_ad_response(ad)
 
     async def evaluate_ad(self, ad: Ad) -> EvaluationResponse:
-        """Evaluate ad quality"""
+        """Evaluate ad quality using Dify"""
+
+        logger.info(f"Evaluating ad {ad.id}")
 
         ad_data = {
             'id': str(ad.id),
@@ -164,10 +317,12 @@ class AdService:
 
         try:
             evaluation_result = await self.dify_service.evaluate_ad(ad_data)
+            logger.info(f"Ad {ad.id} evaluated successfully")
         except Exception as e:
-            logger.error(f"Failed to evaluate ad via Dify: {str(e)}")
-            raise DifyAPIException(f"Unable to connect to AI evaluation service. Error: {str(e)}")
+            logger.error(f"Failed to evaluate ad {ad.id}: {str(e)}")
+            raise DifyAPIException(f"Unable to evaluate ad: {str(e)}")
 
+        # Create evaluation record
         evaluation = AdEvaluation(
             ad_id=ad.id,
             relevance_score=evaluation_result.get('relevance_score', 0),
@@ -183,6 +338,7 @@ class AdService:
 
         self.db.add(evaluation)
 
+        # Update ad with evaluation results
         ad.evaluation_score = evaluation.overall_score
         ad.evaluation_details = evaluation_result
         ad.evaluated_at = datetime.utcnow()
@@ -190,6 +346,8 @@ class AdService:
 
         self.db.commit()
         self.db.refresh(evaluation)
+
+        logger.info(f"Evaluation saved for ad {ad.id} with score {evaluation.overall_score}")
 
         return EvaluationResponse(
             ad_id=ad.id,
@@ -204,8 +362,10 @@ class AdService:
         )
 
     def get_ad(self, ad_id: UUID) -> Optional[Ad]:
-        """Get ad by ID"""
-        return self.ad_repository.get(ad_id)
+        """Get ad by ID with company relationship loaded"""
+        return self.db.query(Ad).options(
+            joinedload(Ad.company)
+        ).filter(Ad.id == ad_id).first()
 
     def list_company_ads(
             self,
@@ -216,7 +376,9 @@ class AdService:
     ) -> Dict[str, Any]:
         """List company ads with pagination"""
 
-        query = self.db.query(Ad).filter(Ad.company_id == company_id)
+        query = self.db.query(Ad).options(
+            joinedload(Ad.company)
+        ).filter(Ad.company_id == company_id)
 
         if status:
             query = query.filter(Ad.status == status)
@@ -314,6 +476,7 @@ class AdService:
             )
         ).count()
 
+        # Daily breakdown
         daily_breakdown = []
         current_date = start_date.date()
         while current_date <= end_date.date():
@@ -335,6 +498,7 @@ class AdService:
 
             current_date += timedelta(days=1)
 
+        # Platform distribution
         platform_distribution = {}
         ads = self.db.query(Ad).filter(
             and_(
@@ -362,6 +526,7 @@ class AdService:
 
         total = self.db.query(Ad).filter(Ad.company_id == company_id).count()
 
+        # By status
         by_status = {}
         for status in AdStatus:
             count = self.db.query(Ad).filter(
@@ -372,6 +537,7 @@ class AdService:
             ).count()
             by_status[status.value] = count
 
+        # By event
         by_event = self.db.query(
             Ad.event_name,
             func.count(Ad.id).label('count')
@@ -383,6 +549,7 @@ class AdService:
 
         by_event_dict = {event: count for event, count in by_event}
 
+        # Regeneration stats
         total_regenerations = self.db.query(Ad).filter(
             and_(
                 Ad.company_id == company_id,
@@ -396,6 +563,7 @@ class AdService:
             Ad.company_id == company_id
         ).scalar() or 0
 
+        # Evaluation stats
         total_evaluated = self.db.query(Ad).filter(
             and_(
                 Ad.company_id == company_id,
@@ -405,6 +573,7 @@ class AdService:
 
         avg_score = self.get_average_evaluation_score(company_id)
 
+        # Score distribution
         score_distribution = {
             '0-2': 0,
             '2-4': 0,
@@ -444,15 +613,35 @@ class AdService:
             'score_distribution': score_distribution
         }
 
-    def delete_ad(self, ad_id: UUID):
-        """Delete ad"""
+    def delete_ad(self, ad_id: UUID) -> None:
+        """Delete ad and associated images"""
         ad = self.get_ad(ad_id)
         if ad:
+            # Delete the ad from database
             self.db.delete(ad)
             self.db.commit()
+            logger.info(f"Ad {ad_id} deleted from database")
+
+            # Delete associated images asynchronously
+            import asyncio
+            try:
+                asyncio.create_task(delete_ad_images(ad_id))
+            except RuntimeError:
+                # If no event loop, run synchronously
+                asyncio.run(delete_ad_images(ad_id))
+
+            logger.info(f"Ad {ad_id} and images deleted successfully")
 
     def _format_ad_response(self, ad: Ad) -> AdResponse:
-        """Format ad for response - FIXED to handle missing fields"""
+        """Format ad for response with proper field mapping"""
+
+        # Ensure company is loaded
+        if not ad.company:
+            company = self.db.query(Company).filter(Company.id == ad.company_id).first()
+            company_name = company.name if company else "Unknown Company"
+        else:
+            company_name = ad.company.name
+
         return AdResponse(
             id=ad.id,
             event_name=ad.event_name,
@@ -460,7 +649,7 @@ class AdService:
             product_categories=ad.product_categories or [],
             location=ad.location,
             company_id=ad.company_id,
-            company_name=ad.company.name if ad.company else "Unknown Company",
+            company_name=company_name,
             content={
                 'headline': ad.headline or '',
                 'description': ad.description or '',
@@ -469,8 +658,8 @@ class AdService:
                 'keywords': ad.keywords or [],
                 'hashtags': ad.hashtags or [],
                 'image_prompt': ad.image_prompt or '',
-                'image_base64': ad.image_base64,
-                'image_url': ad.image_url
+                'image_base64': None,  # No longer using base64
+                'image_url': ad.image_url  # Use the public URL instead
             },
             platforms=ad.platforms or [],
             platform_details=ad.platform_details or {},

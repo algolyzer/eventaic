@@ -7,6 +7,9 @@ from app.services.auth_service import AuthService
 from app.services.email_service import EmailService
 from app.models.user import User
 from app.core.config import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -22,52 +25,67 @@ async def register(
     auth_service = AuthService(db)
     email_service = EmailService()
 
-    # Check if user exists
-    if auth_service.get_user_by_email(request.email):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
+    try:
+        # Check if user exists (auth_service will also check, but we check here for clearer errors)
+        if auth_service.get_user_by_email(request.email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
 
-    if auth_service.get_user_by_username(request.username):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already taken"
-        )
+        if auth_service.get_user_by_username(request.username):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
 
-    # Create user
-    user = await auth_service.create_user(request)
+        # Create user
+        user = await auth_service.create_user(request)
 
-    # Send verification email if enabled
-    if settings.EMAIL_VERIFICATION_REQUIRED:
-        verification_link = auth_service.create_verification_link(user)
-        background_tasks.add_task(
-            email_service.send_verification_email,
-            user.email,
-            user.username,
-            verification_link
-        )
+        # Send verification email if enabled
+        if settings.EMAIL_VERIFICATION_REQUIRED:
+            verification_link = auth_service.create_verification_link(user)
+            background_tasks.add_task(
+                email_service.send_verification_email,
+                user.email,
+                user.username,
+                verification_link
+            )
 
-    # Generate tokens
-    tokens = auth_service.create_tokens(user)
+        # Generate tokens
+        tokens = auth_service.create_tokens(user)
 
-    # Return response with user data
-    return {
-        "access_token": tokens.access_token,
-        "refresh_token": tokens.refresh_token,
-        "token_type": tokens.token_type,
-        "expires_in": tokens.expires_in,
-        "user": {
-            "id": str(user.id),
-            "email": user.email,
-            "username": user.username,
-            "full_name": user.full_name,
-            "name": user.full_name or user.username,  # Add 'name' for compatibility
-            "role": user.role.value if hasattr(user.role, 'value') else user.role,
-            "company_id": str(user.company_id) if user.company_id else None,
-            "company_name": user.company.name if user.company else None
+        # Return response with user data
+        return {
+            "access_token": tokens.access_token,
+            "refresh_token": tokens.refresh_token,
+            "token_type": tokens.token_type,
+            "expires_in": tokens.expires_in,
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "username": user.username,
+                "full_name": user.full_name,
+                "name": user.full_name or user.username,
+                "role": user.role.value if hasattr(user.role, 'value') else user.role,
+                "company_id": str(user.company_id) if user.company_id else None,
+                "company_name": user.company.name if user.company else None
+            }
         }
-    }
+    except ValueError as e:
+        # Handle validation errors from auth service
+        logger.warning(f"Registration validation error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        # Handle unexpected errors
+        logger.error(f"Registration failed: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Registration failed: {str(e)}"
+        )
 
 
 @router.post("/login")

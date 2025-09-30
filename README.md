@@ -27,8 +27,6 @@
 - [API Documentation](#-api-documentation)
 - [Frontend Guide](#-frontend-guide)
 - [Deployment](#-deployment)
-- [Contributing](#-contributing)
-- [License](#-license)
 
 ## ✨ Features
 

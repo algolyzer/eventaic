@@ -10,7 +10,7 @@ from app.models.enums import AdStatus, AdType
 from app.schemas.ad import AdGenerationRequest, AdResponse, EvaluationResponse
 from app.services.dify_service import DifyService
 from app.repositories.ad_repository import AdRepository
-from app.core.exceptions import NotFoundException, CompanyLimitException
+from app.core.exceptions import NotFoundException, CompanyLimitException, DifyAPIException
 import logging
 
 logger = logging.getLogger(__name__)
@@ -30,13 +30,17 @@ class AdService:
             raise CompanyLimitException("Monthly ad generation limit reached")
 
         # Call Dify to generate ad
-        dify_response = await self.dify_service.generate_ad(
-            event_name=request.event_name,
-            product_categories=request.product_categories,
-            company_name=request.company_name or user.company.name,
-            location=request.location,
-            product_name=request.product_name
-        )
+        try:
+            dify_response = await self.dify_service.generate_ad(
+                event_name=request.event_name,
+                product_categories=request.product_categories,
+                company_name=request.company_name or user.company.name,
+                location=request.location,
+                product_name=request.product_name
+            )
+        except Exception as e:
+            logger.error(f"Failed to generate ad via Dify: {str(e)}")
+            raise DifyAPIException(f"Unable to connect to AI service. Please try again later. Error: {str(e)}")
 
         # Create ad record
         ad = Ad(
@@ -84,7 +88,6 @@ class AdService:
     ) -> AdResponse:
         """Regenerate ad or just image"""
 
-        # Prepare ad data for regeneration
         ad_data = {
             'event_name': original_ad.event_name,
             'company_name': user.company.name,
@@ -94,21 +97,22 @@ class AdService:
             'slogan': original_ad.slogan
         }
 
-        # Call Dify for regeneration
-        dify_response = await self.dify_service.regenerate_ad(
-            ad_data=ad_data,
-            regenerate_image=regenerate_image,
-            additional_instructions=additional_instructions
-        )
+        try:
+            dify_response = await self.dify_service.regenerate_ad(
+                ad_data=ad_data,
+                regenerate_image=regenerate_image,
+                additional_instructions=additional_instructions
+            )
+        except Exception as e:
+            logger.error(f"Failed to regenerate ad via Dify: {str(e)}")
+            raise DifyAPIException(f"Unable to connect to AI service. Error: {str(e)}")
 
         if regenerate_image:
-            # Update only image
             original_ad.image_prompt = dify_response.get('image_prompt')
             original_ad.image_base64 = dify_response.get('image_base64')
             original_ad.regeneration_count += 1
             original_ad.updated_at = datetime.utcnow()
         else:
-            # Create new ad with regenerated content
             ad = Ad(
                 event_name=original_ad.event_name,
                 product_name=original_ad.product_name,
@@ -145,7 +149,6 @@ class AdService:
     async def evaluate_ad(self, ad: Ad) -> EvaluationResponse:
         """Evaluate ad quality"""
 
-        # Prepare ad data for evaluation
         ad_data = {
             'id': str(ad.id),
             'event_name': ad.event_name,
@@ -159,10 +162,12 @@ class AdService:
             'hashtags': ad.hashtags
         }
 
-        # Call Dify for evaluation
-        evaluation_result = await self.dify_service.evaluate_ad(ad_data)
+        try:
+            evaluation_result = await self.dify_service.evaluate_ad(ad_data)
+        except Exception as e:
+            logger.error(f"Failed to evaluate ad via Dify: {str(e)}")
+            raise DifyAPIException(f"Unable to connect to AI evaluation service. Error: {str(e)}")
 
-        # Create evaluation record
         evaluation = AdEvaluation(
             ad_id=ad.id,
             relevance_score=evaluation_result.get('relevance_score', 0),
@@ -178,7 +183,6 @@ class AdService:
 
         self.db.add(evaluation)
 
-        # Update ad with evaluation
         ad.evaluation_score = evaluation.overall_score
         ad.evaluation_details = evaluation_result
         ad.evaluated_at = datetime.utcnow()
@@ -284,7 +288,6 @@ class AdService:
     ) -> Dict[str, Any]:
         """Get detailed company usage statistics"""
 
-        # Get total counts
         total_generated = self.db.query(Ad).filter(
             and_(
                 Ad.company_id == company_id,
@@ -311,7 +314,6 @@ class AdService:
             )
         ).count()
 
-        # Get daily breakdown
         daily_breakdown = []
         current_date = start_date.date()
         while current_date <= end_date.date():
@@ -333,7 +335,6 @@ class AdService:
 
             current_date += timedelta(days=1)
 
-        # Get platform distribution
         platform_distribution = {}
         ads = self.db.query(Ad).filter(
             and_(
@@ -359,10 +360,8 @@ class AdService:
     def get_company_ad_statistics(self, company_id: UUID) -> Dict[str, Any]:
         """Get comprehensive ad statistics for company"""
 
-        # Total ads
         total = self.db.query(Ad).filter(Ad.company_id == company_id).count()
 
-        # By status
         by_status = {}
         for status in AdStatus:
             count = self.db.query(Ad).filter(
@@ -373,7 +372,6 @@ class AdService:
             ).count()
             by_status[status.value] = count
 
-        # By event (top 10)
         by_event = self.db.query(
             Ad.event_name,
             func.count(Ad.id).label('count')
@@ -385,7 +383,6 @@ class AdService:
 
         by_event_dict = {event: count for event, count in by_event}
 
-        # Regeneration stats
         total_regenerations = self.db.query(Ad).filter(
             and_(
                 Ad.company_id == company_id,
@@ -399,7 +396,6 @@ class AdService:
             Ad.company_id == company_id
         ).scalar() or 0
 
-        # Evaluation stats
         total_evaluated = self.db.query(Ad).filter(
             and_(
                 Ad.company_id == company_id,
@@ -409,7 +405,6 @@ class AdService:
 
         avg_score = self.get_average_evaluation_score(company_id)
 
-        # Score distribution
         score_distribution = {
             '0-2': 0,
             '2-4': 0,
@@ -457,33 +452,33 @@ class AdService:
             self.db.commit()
 
     def _format_ad_response(self, ad: Ad) -> AdResponse:
-        """Format ad for response"""
+        """Format ad for response - FIXED to handle missing fields"""
         return AdResponse(
             id=ad.id,
             event_name=ad.event_name,
             product_name=ad.product_name,
-            product_categories=ad.product_categories,
+            product_categories=ad.product_categories or [],
             location=ad.location,
             company_id=ad.company_id,
-            company_name=ad.company.name,
+            company_name=ad.company.name if ad.company else "Unknown Company",
             content={
-                'headline': ad.headline,
-                'description': ad.description,
-                'slogan': ad.slogan,
-                'cta_text': ad.cta_text,
-                'keywords': ad.keywords,
-                'hashtags': ad.hashtags,
-                'image_prompt': ad.image_prompt,
+                'headline': ad.headline or '',
+                'description': ad.description or '',
+                'slogan': ad.slogan or '',
+                'cta_text': ad.cta_text or '',
+                'keywords': ad.keywords or [],
+                'hashtags': ad.hashtags or [],
+                'image_prompt': ad.image_prompt or '',
                 'image_base64': ad.image_base64,
                 'image_url': ad.image_url
             },
-            platforms=ad.platforms,
-            platform_details=ad.platform_details,
+            platforms=ad.platforms or [],
+            platform_details=ad.platform_details or {},
             status=ad.status,
             ad_type=ad.ad_type,
             evaluation_score=ad.evaluation_score,
             evaluation_details=ad.evaluation_details,
-            regeneration_count=ad.regeneration_count,
+            regeneration_count=ad.regeneration_count or 0,
             parent_ad_id=ad.parent_ad_id,
             created_at=ad.created_at,
             updated_at=ad.updated_at,

@@ -1,4 +1,3 @@
-from typing import Optional
 import uuid
 
 from fastapi import Depends, HTTPException, status

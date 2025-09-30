@@ -6,7 +6,7 @@ import random
 import string
 import sys
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 
 def setup_logging(level: str = "INFO") -> None:

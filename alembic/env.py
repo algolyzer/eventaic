@@ -4,12 +4,12 @@ from alembic import context
 import os
 import sys
 
-# allow "alembic" to import the app package
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 from app.core.config import settings
 from app.core.database import Base  # models use this Base
 from app.models import user, company, ad  # import models to ensure they’re registered
+
+# allow "alembic" to import the app package
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # this is the Alembic Config object
 config = context.config

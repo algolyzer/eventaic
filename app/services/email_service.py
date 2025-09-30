@@ -4,7 +4,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import logging
 import smtplib
-from typing import List, Optional
+from typing import Optional
 
 from app.core.config import settings
 from app.utils.email_templates import EmailTemplates

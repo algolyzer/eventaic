@@ -6,11 +6,7 @@ from uuid import UUID
 from sqlalchemy import and_, func
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import (
-    CompanyLimitException,
-    DifyAPIException,
-    NotFoundException,
-)
+from app.core.exceptions import CompanyLimitException, DifyAPIException
 from app.models.ad import Ad, AdEvaluation
 from app.models.company import Company
 from app.models.enums import AdStatus, AdType
@@ -213,7 +209,7 @@ class AdService:
                     raise ValueError("Failed to download image from generated URL")
 
                 filename, public_url = result
-                logger.info(f"💾 Image saved successfully!")
+                logger.info("💾 Image saved successfully!")
                 logger.info(f"   Filename: {filename}")
                 logger.info(f"   Public URL: {public_url}")
 

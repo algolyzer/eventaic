@@ -3,7 +3,6 @@ import uuid
 
 from sqlalchemy import (
     JSON,
-    Boolean,
     Column,
     DateTime,
     Enum,
@@ -17,7 +16,7 @@ from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.models.enums import AdStatus, AdType, Platform
+from app.models.enums import AdStatus, AdType
 
 
 class Ad(Base):

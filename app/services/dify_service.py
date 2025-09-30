@@ -117,8 +117,8 @@ Return the image URL or upload the image."""
         }
 
         try:
-            logger.info(f"🎨 Sending image generation request to Dify...")
-            logger.info(f"📝 Prompt: {enhanced_prompt[:100]}...")
+            logger.info("🎨 Sending image generation request to Dify...")
+            logger.info("📝 Prompt: {enhanced_prompt[:100]}...")
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -198,7 +198,7 @@ Return the image URL or upload the image."""
                         raise Exception(f"Dify API returned status {response.status}")
 
                     result = await response.json()
-                    logger.info(f"Dify regeneration response received")
+                    logger.info("Dify regeneration response received")
 
                     return self._parse_generation_response(result)
 
@@ -230,7 +230,7 @@ Return the image URL or upload the image."""
                         raise Exception(f"Dify API returned status {response.status}")
 
                     result = await response.json()
-                    logger.info(f"Dify evaluation response received")
+                    logger.info("Dify evaluation response received")
 
                     return self._parse_evaluation_response(result)
 
@@ -329,7 +329,7 @@ Slogan: {ad_data.get('slogan')}
 """
 
         if ad_type == AdType.REGEN_IMAGE:
-            base_prompt += f"""
+            base_prompt += """
 
 Generate ONLY a new image prompt. Respond with valid JSON:
 {{
@@ -337,7 +337,7 @@ Generate ONLY a new image prompt. Respond with valid JSON:
 }}
 """
         else:
-            base_prompt += f"""
+            base_prompt += """
 
 Generate completely new ad content while maintaining the same event theme. Respond with ONLY a valid JSON object in this exact format:
 {{

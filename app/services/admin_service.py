@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
 from sqlalchemy import and_, func, or_
@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 
 from app.models.ad import Ad
 from app.models.company import Company
-from app.models.enums import AdStatus, UserRole
 from app.models.user import User
 from app.repositories.ad_repository import AdRepository
 from app.repositories.company_repository import CompanyRepository
@@ -31,11 +30,11 @@ class AdminService:
         # Company stats
         total_companies = self.db.query(Company).count()
         active_companies = (
-            self.db.query(Company).filter(Company.is_active == True).count()
+            self.db.query(Company).filter(Company.is_active.is_(True)).count()
         )
 
         # User stats
-        total_users = self.db.query(User).filter(User.is_deleted == False).count()
+        total_users = self.db.query(User).filter(User.is_deleted.is_(False)).count()
 
         # Ad stats
         total_ads = self.db.query(Ad).count()
@@ -388,7 +387,7 @@ class AdminService:
     ) -> Dict[str, Any]:
         """Get all users with pagination"""
 
-        query = self.db.query(User).filter(User.is_deleted == False)
+        query = self.db.query(User).filter(User.is_deleted.is_(False))
 
         if search:
             query = query.filter(

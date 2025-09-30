@@ -73,7 +73,7 @@
               class="btn flex-1 justify-center"
               :disabled="loading"
           >
-            <span v-if="loading">Generating...</span>
+            <span v-if="loading">⏳ Generating (this may take up to 60 seconds)...</span>
             <span v-else>✨ Generate Ad</span>
           </button>
           <button
@@ -86,6 +86,17 @@
           </button>
         </div>
       </form>
+
+      <!-- Loading Indicator -->
+      <div v-if="loading" class="mt-4 p-4 rounded-xl bg-white/5 border border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="animate-spin text-2xl">⚙️</div>
+          <div>
+            <div class="font-medium">Generating your ad...</div>
+            <div class="text-sm text-white/60">Creating content and image. This typically takes 20-40 seconds.</div>
+          </div>
+        </div>
+      </div>
 
       <!-- Error Message -->
       <div v-if="error" class="mt-4 p-4 rounded-xl bg-red-500/20 border border-red-500/30 text-red-400">
@@ -106,6 +117,16 @@
       <h2 class="text-xl font-bold mb-4">Generated Ad Preview</h2>
 
       <div class="space-y-4">
+        <!-- Image Preview -->
+        <div v-if="generatedAd.content?.image_url" class="rounded-xl overflow-hidden border border-white/10">
+          <img
+              :src="getImageUrl(generatedAd.content.image_url)"
+              :alt="generatedAd.content?.headline || 'Generated ad image'"
+              class="w-full h-auto"
+              @error="handleImageError"
+          />
+        </div>
+
         <!-- Headline -->
         <div>
           <div class="text-sm text-white/60 mb-1">Headline</div>
@@ -182,7 +203,7 @@
 <script setup>
 import {ref} from 'vue'
 import {RouterLink, useRouter} from 'vue-router'
-import {api} from '@/services/api'
+import {api, apiLongRunning} from '@/services/api'
 
 const router = useRouter()
 
@@ -230,6 +251,19 @@ function formatPlatform(platform) {
   return platforms[platform] || platform
 }
 
+function getImageUrl(url) {
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    return url
+  }
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+  return `${baseUrl}${url}`
+}
+
+function handleImageError(event) {
+  console.error('Failed to load image:', event.target.src)
+  event.target.style.display = 'none'
+}
+
 async function generateAd() {
   loading.value = true
   error.value = ''
@@ -257,11 +291,17 @@ async function generateAd() {
     if (form.value.location) payload.location = form.value.location
     if (form.value.company_name) payload.company_name = form.value.company_name
 
-    const response = await api.post('/api/v1/ads/generate', payload)
+    console.log('🚀 Generating ad...')
+    console.log('⏱️ This may take 20-40 seconds...')
+
+    // Use apiLongRunning for ad generation with image (2 minute timeout)
+    const response = await apiLongRunning.post('/api/v1/ads/generate', payload)
 
     generatedAd.value = response.data
     generatedAdId.value = response.data.id
     success.value = 'Ad generated successfully!'
+
+    console.log('✅ Ad generated:', generatedAd.value)
 
     // Scroll to preview
     setTimeout(() => {
@@ -269,7 +309,7 @@ async function generateAd() {
     }, 100)
 
   } catch (err) {
-    console.error('Generation error:', err)
+    console.error('❌ Generation error:', err)
     error.value = err.response?.data?.detail || err.message || 'Failed to generate ad'
   } finally {
     loading.value = false
@@ -283,6 +323,7 @@ async function evaluateAd() {
   error.value = ''
 
   try {
+    console.log('🧪 Evaluating ad...')
     const response = await api.post('/api/v1/ads/evaluate', {
       ad_id: generatedAdId.value
     })
@@ -294,7 +335,10 @@ async function evaluateAd() {
     }
 
     success.value = `Ad evaluated! Overall score: ${response.data.overall_score}/10`
+
+    console.log('✅ Evaluation complete:', response.data)
   } catch (err) {
+    console.error('❌ Evaluation error:', err)
     error.value = err.response?.data?.detail || 'Failed to evaluate ad'
   } finally {
     evaluating.value = false
@@ -308,7 +352,11 @@ async function regenerateAd() {
   error.value = ''
 
   try {
-    const response = await api.post('/api/v1/ads/regenerate', {
+    console.log('🔄 Regenerating ad...')
+    console.log('⏱️ This may take 20-40 seconds...')
+
+    // Use apiLongRunning for regeneration with image
+    const response = await apiLongRunning.post('/api/v1/ads/regenerate', {
       ad_id: generatedAdId.value,
       regenerate_image: false
     })
@@ -317,7 +365,10 @@ async function regenerateAd() {
     generatedAdId.value = response.data.id
     success.value = 'Ad regenerated successfully!'
 
+    console.log('✅ Ad regenerated:', generatedAd.value)
+
   } catch (err) {
+    console.error('❌ Regeneration error:', err)
     error.value = err.response?.data?.detail || 'Failed to regenerate ad'
   } finally {
     regenerating.value = false
@@ -336,5 +387,24 @@ async function regenerateAd() {
 .btn-ghost:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+  display: block;
 }
 </style>

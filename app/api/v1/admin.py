@@ -178,6 +178,27 @@ async def update_company_limits(
     return {"message": f"Monthly limit updated to {monthly_limit}"}
 
 
+@router.get("/users")
+async def list_all_users(
+        page: int = Query(1, ge=1),
+        per_page: int = Query(20, ge=1, le=100),
+        search: Optional[str] = None,
+        current_user: User = Depends(get_super_admin),
+        db: Session = Depends(get_db)
+):
+    """List all users with pagination (admin only)"""
+
+    admin_service = AdminService(db)
+
+    users = admin_service.get_all_users(
+        page=page,
+        per_page=per_page,
+        search=search
+    )
+
+    return users
+
+
 @router.post("/users")
 async def create_user_by_admin(
         user_data: UserCreate,
@@ -186,69 +207,100 @@ async def create_user_by_admin(
 ):
     """Create a new user (admin only)"""
 
-    auth_service = AuthService(db)
-    security = Security()
+    try:
+        auth_service = AuthService(db)
+        security = Security()
 
-    # Check if user already exists
-    if auth_service.get_user_by_email(user_data.email):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
-        )
+        # Validate and sanitize inputs
+        email = user_data.email.strip().lower()
+        username = user_data.username.strip()
+        full_name = user_data.full_name.strip() if user_data.full_name else None
+        company_name = user_data.company_name.strip() if user_data.company_name else None
 
-    if auth_service.get_user_by_username(user_data.username):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Username already taken"
-        )
-
-    # Create or get company if company_name provided
-    company = None
-    if hasattr(user_data, 'company_name') and user_data.company_name:
-        from app.repositories.company_repository import CompanyRepository
-        company_repo = CompanyRepository(db)
-        company = company_repo.get_by_name(user_data.company_name)
-        if not company:
-            company = Company(
-                name=user_data.company_name,
-                email=user_data.email
+        # Check if user already exists
+        if auth_service.get_user_by_email(email):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
             )
-            db.add(company)
-            db.flush()
 
-    # Hash password
-    hashed_password = security.get_password_hash(user_data.password)
+        if auth_service.get_user_by_username(username):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
 
-    # Create user with specified role
-    user = UserModel(
-        email=user_data.email,
-        username=user_data.username,
-        full_name=user_data.full_name,
-        phone=user_data.phone,
-        hashed_password=hashed_password,
-        role=user_data.role,  # Use the role from request
-        company_id=company.id if company else None,
-        is_email_verified=True,  # Admin-created users are auto-verified
-        is_active=True
-    )
+        # Validate password strength
+        if len(user_data.password) < 8:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Password must be at least 8 characters long"
+            )
 
-    db.add(user)
-    db.commit()
-    db.refresh(user)
+        # Create or get company if company_name provided and not empty
+        company = None
+        if company_name:
+            from app.repositories.company_repository import CompanyRepository
+            company_repo = CompanyRepository(db)
+            company = company_repo.get_by_name(company_name)
+            if not company:
+                # Create new company
+                company = Company(
+                    name=company_name,
+                    email=email
+                )
+                db.add(company)
+                db.flush()
+                logger.info(f"New company created by admin: {company.name}")
 
-    logger.info(f"User {user.id} created by admin {current_user.id}")
+        # Hash password
+        hashed_password = security.get_password_hash(user_data.password)
 
-    return {
-        "message": "User created successfully",
-        "user": {
-            "id": str(user.id),
-            "email": user.email,
-            "username": user.username,
-            "full_name": user.full_name,
-            "role": user.role.value,
-            "company_id": str(user.company_id) if user.company_id else None
+        # Create user with specified role
+        user = UserModel(
+            email=email,
+            username=username,
+            full_name=full_name,
+            phone=user_data.phone.strip() if user_data.phone else None,
+            hashed_password=hashed_password,
+            role=user_data.role,
+            company_id=company.id if company else None,
+            is_email_verified=True,  # Admin-created users are auto-verified
+            is_active=True
+        )
+
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        logger.info(f"User {user.id} ({user.email}) created by admin {current_user.id}")
+
+        return {
+            "message": "User created successfully",
+            "user": {
+                "id": str(user.id),
+                "email": user.email,
+                "username": user.username,
+                "full_name": user.full_name,
+                "role": user.role.value,
+                "company_id": str(user.company_id) if user.company_id else None,
+                "company_name": company.name if company else None
+            }
         }
-    }
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        db.rollback()
+        raise
+    except Exception as e:
+        # Rollback and log any other errors
+        db.rollback()
+        logger.error(f"Admin user creation failed: {str(e)}")
+        logger.exception("Full traceback:")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create user: {str(e)}"
+        )
 
 
 @router.post("/users/{user_id}/deactivate")

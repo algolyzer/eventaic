@@ -52,7 +52,7 @@ class AuthService:
         email = self._sanitize_input(request.email.lower())
         username = self._sanitize_input(request.username)
         full_name = self._sanitize_input(request.full_name) if request.full_name else None
-        company_name = self._sanitize_input(request.company_name) if request.company_name else None
+        company_name = self._sanitize_input(request.company_name)  # Always required now
 
         # Validate formats
         if not self._validate_email_format(email):
@@ -68,30 +68,28 @@ class AuthService:
         if self.user_repository.get_by_username(username):
             raise ValueError("Username already taken")
 
-        # Hash password with bcrypt (not sha256_crypt)
+        # Hash password
         hashed_password = self.security.get_password_hash(request.password)
 
-        # Create or get company if company name provided
-        company = None
-        if company_name:
-            company = self.company_repository.get_by_name(company_name)
-            if not company:
-                company = Company(
-                    name=company_name,
-                    email=email
-                )
-                self.db.add(company)
-                self.db.flush()
+        # Always create or get company for regular registration
+        company = self.company_repository.get_by_name(company_name)
+        if not company:
+            company = Company(
+                name=company_name,
+                email=email
+            )
+            self.db.add(company)
+            self.db.flush()
 
-        # Create user
+        # Create user - always COMPANY role for public registration
         user = User(
             email=email,
             username=username,
             full_name=full_name,
             phone=self._sanitize_input(request.phone) if request.phone else None,
             hashed_password=hashed_password,
-            role=UserRole.COMPANY if company else UserRole.SUPER_ADMIN,
-            company_id=company.id if company else None,
+            role=UserRole.COMPANY,  # Always COMPANY for public registration
+            company_id=company.id,
             is_email_verified=not settings.EMAIL_VERIFICATION_REQUIRED
         )
 

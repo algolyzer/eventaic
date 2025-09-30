@@ -47,15 +47,15 @@ app = FastAPI(
     version=settings.APP_VERSION,
     debug=settings.DEBUG,
     lifespan=lifespan,
-    docs_url="/api/docs",  # Move docs to /api/docs
-    redoc_url="/api/redoc",  # Move redoc to /api/redoc
-    openapi_url="/api/openapi.json"  # Move OpenAPI spec
+    docs_url="/api/docs",
+    redoc_url="/api/redoc",
+    openapi_url="/api/openapi.json"
 )
 
 # Add middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS + ["http://localhost:5173"],  # Add Vite dev server
+    allow_origins=settings.ALLOWED_ORIGINS + ["http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -66,7 +66,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 if not settings.DEBUG:
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["*"]  # Configure appropriately for production
+        allowed_hosts=["*"]
     )
 
 # Add rate limiting
@@ -95,6 +95,30 @@ async def health_check():
     }
 
 
+# Favicon route
+@app.get("/favicon.ico")
+async def favicon():
+    """Serve favicon"""
+    PROJECT_ROOT = Path(__file__).parent.parent
+    favicon_path = PROJECT_ROOT / "eventaic-frontend" / "landing" / "assets" / "favicon.ico"
+
+    # If no physical favicon exists, return a simple SVG
+    if not favicon_path.exists():
+        svg_content = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+            <defs>
+                <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+                    <stop stop-color="#7c5cff"/>
+                    <stop stop-color="#00d4ff" offset="1"/>
+                </linearGradient>
+            </defs>
+            <rect rx="14" width="64" height="64" fill="url(#g)"/>
+            <text x="50%" y="58%" text-anchor="middle" font-size="34" font-family="Arial" fill="white">E</text>
+        </svg>"""
+        return HTMLResponse(content=svg_content, media_type="image/svg+xml")
+
+    return FileResponse(favicon_path)
+
+
 # Include API router with /api/v1 prefix
 app.include_router(api_router, prefix=settings.API_PREFIX)
 
@@ -109,11 +133,9 @@ if LANDING_PATH.exists():
 
 # Mount Vue app static files if built
 if APP_PATH.exists():
-    # Serve Vue app static files
     app.mount("/app/assets", StaticFiles(directory=str(APP_PATH / "assets")), name="app_assets")
 
 
-    # Serve Vue app for /app routes
     @app.get("/app/{full_path:path}")
     async def serve_app(full_path: str):
         """Serve Vue app for all /app routes"""
@@ -122,7 +144,6 @@ if APP_PATH.exists():
             return FileResponse(str(index_file))
         return HTMLResponse(content="App not built. Run 'npm run build' in eventaic-frontend/app", status_code=404)
 else:
-    # Development mode - redirect to Vite dev server
     @app.get("/app/{full_path:path}")
     async def redirect_to_dev(full_path: str):
         """Redirect to Vite dev server in development"""
@@ -139,24 +160,18 @@ else:
         """)
 
 
-# Serve landing page at root
 @app.get("/")
 async def serve_landing():
     """Serve landing page at root"""
     landing_file = LANDING_PATH / "index.html"
 
     if landing_file.exists():
-        # Read the HTML file and update paths for assets
         with open(landing_file, 'r', encoding='utf-8') as f:
             content = f.read()
-
-        # Update asset paths to be absolute
         content = content.replace('href="assets/', 'href="/assets/')
         content = content.replace('src="assets/', 'src="/assets/')
-
         return HTMLResponse(content=content)
     else:
-        # Fallback HTML if landing page not found
         return HTMLResponse(content="""
         <!DOCTYPE html>
         <html lang="en">

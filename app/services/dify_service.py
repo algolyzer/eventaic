@@ -1,10 +1,10 @@
 import aiohttp
 import json
-import base64
 from typing import Dict, Any, Optional, List
 from app.core.config import settings
 from app.models.enums import AdType
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -98,8 +98,7 @@ Requirements:
 - Brand-safe content
 - Modern design aesthetic
 
-Return ONLY the base64 encoded image data with no additional text or formatting.
-The response should be pure base64 string starting with the image data."""
+Return the image URL or upload the image."""
 
         payload = {
             "inputs": {},
@@ -109,28 +108,44 @@ The response should be pure base64 string starting with the image data."""
         }
 
         try:
+            logger.info(f"🎨 Sending image generation request to Dify...")
+            logger.info(f"📝 Prompt: {enhanced_prompt[:100]}...")
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                         f"{self.base_url}/chat-messages",
                         headers=self.headers,
                         json=payload,
-                        timeout=aiohttp.ClientTimeout(total=60)  # Longer timeout for image generation
+                        timeout=aiohttp.ClientTimeout(total=60)
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error(f"Dify image API error: {response.status} - {error_text}")
+                        logger.error(f"❌ Dify image API error: {response.status} - {error_text}")
                         raise Exception(f"Dify image API returned status {response.status}")
 
                     result = await response.json()
-                    logger.info("Dify image response received")
 
-                    return self._parse_image_response(result, image_prompt)
+                    # Log the COMPLETE response for debugging
+                    logger.info("=" * 80)
+                    logger.info("📦 COMPLETE DIFY IMAGE RESPONSE:")
+                    logger.info(json.dumps(result, indent=2))
+                    logger.info("=" * 80)
+
+                    # Parse and return image URL
+                    image_url = self._parse_image_response(result, image_prompt)
+
+                    if image_url:
+                        logger.info(f"✅ Successfully extracted image URL: {image_url[:100]}...")
+                    else:
+                        logger.warning("⚠️ No image URL found in Dify response")
+
+                    return image_url
 
         except aiohttp.ClientError as e:
-            logger.error(f"Dify image connection error: {str(e)}")
+            logger.error(f"🔌 Dify image connection error: {str(e)}")
             raise Exception(f"Failed to connect to image service: {str(e)}")
         except Exception as e:
-            logger.error(f"Dify image request failed: {str(e)}")
+            logger.error(f"💥 Dify image request failed: {str(e)}")
             raise Exception(f"Image generation error: {str(e)}")
 
     async def regenerate_ad(
@@ -369,7 +384,6 @@ Scores should be between 0-10. Consider event relevance, message clarity, persua
             if not answer:
                 raise ValueError("Empty response from Dify")
 
-            # Log the raw response for debugging
             logger.debug(f"Raw Dify response: {answer[:500]}")
 
             # Try to find JSON in the response
@@ -394,7 +408,6 @@ Scores should be between 0-10. Consider event relevance, message clarity, persua
 
             if missing_fields:
                 logger.warning(f"Missing required fields: {missing_fields}")
-                # Fill missing fields with defaults
                 defaults = {
                     'headline': 'Special Offer',
                     'description': 'Limited time offer',
@@ -423,145 +436,147 @@ Scores should be between 0-10. Consider event relevance, message clarity, persua
 
     def _parse_image_response(self, response: Dict[str, Any], original_prompt: str) -> Optional[str]:
         """
-        Parse Dify image response and return image URL
-
-        Dify returns images in the 'files' array with URLs.
-        This method extracts the URL for download.
-
-        Returns:
-            Image URL if found, None otherwise
+        Parse Dify image response - ULTRA ROBUST VERSION with 5 strategies
         """
 
         try:
-            # Check for files array in response
+            logger.info("🔍 Starting image URL extraction...")
+
+            # STRATEGY 1: Files Array
             files = response.get("files", [])
+            if files:
+                logger.info(f"📁 Found {len(files)} files in response")
+                for idx, file in enumerate(files):
+                    logger.info(f"  File {idx + 1}: type={file.get('type')}, url={file.get('url', 'N/A')[:100]}")
+                    url_candidates = [
+                        file.get('url'), file.get('remote_url'), file.get('download_url'),
+                        file.get('file_url'), file.get('path'), file.get('src'), file.get('href')
+                    ]
+                    for url in url_candidates:
+                        if url and isinstance(url, str) and url.startswith('http'):
+                            logger.info(f"✅ Found URL in files: {url[:100]}")
+                            return url
 
-            if files and len(files) > 0:
-                # Get the first file (should be the generated image)
-                first_file = files[0]
+            # STRATEGY 2: Answer Field
+            answer = response.get("answer", "")
+            if answer:
+                logger.info(f"📄 Checking answer ({len(answer)} chars): {answer[:300]}")
 
-                if first_file.get("type") == "image":
-                    image_url = first_file.get("url")
+                # Markdown images
+                markdown_patterns = [
+                    r'!\[.*?\]\((https?://[^\)]+)\)',
+                    r'!\[.*?\]\((https?://[^\s\)]+)',
+                    r'\[!\[.*?\]\((https?://[^\)]+)\)\]',
+                ]
+                for pattern in markdown_patterns:
+                    matches = re.findall(pattern, answer)
+                    if matches:
+                        logger.info(f"✅ Found markdown URL: {matches[0][:100]}")
+                        return matches[0].strip()
 
-                    if image_url:
-                        logger.info(f"Image URL received from Dify: {image_url[:100]}...")
-                        return image_url
-                    else:
-                        logger.warning("File found but no URL present")
-                else:
-                    logger.warning(f"File type is not image: {first_file.get('type')}")
-            else:
-                logger.warning("No files array in Dify response")
+                # HTML img tags
+                html_matches = re.findall(r'<img[^>]+src=["\']([^"\']+)["\']', answer)
+                if html_matches:
+                    logger.info(f"✅ Found HTML URL: {html_matches[0][:100]}")
+                    return html_matches[0]
 
-            # No valid image URL found
+                # Plain URLs
+                urls = re.findall(r'https?://[^\s<>"{}|\\^`\[\]\'()]+', answer)
+                logger.info(f"   Found {len(urls)} URLs")
+                for url in urls:
+                    url = url.strip()
+                    url_lower = url.lower()
+                    indicators = [
+                        '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp',
+                        'cloud.dify.ai', 'storage', 'cdn', 'amazonaws', 'cloudinary',
+                        'imgix', 'cloudfront', 'imgur', 'image', 'media', 'assets',
+                        'dify', 'file', 'download'
+                    ]
+                    if any(ind in url_lower for ind in indicators):
+                        logger.info(f"✅ Found image URL: {url[:100]}")
+                        return url
+
+                # Base64 data
+                base64_match = re.search(r'data:image/[^;]+;base64,[A-Za-z0-9+/=]+', answer)
+                if base64_match:
+                    logger.info(f"✅ Found base64 data ({len(base64_match.group(0))} chars)")
+                    return base64_match.group(0)
+
+            # STRATEGY 3: Metadata
+            metadata = response.get("metadata", {})
+            if isinstance(metadata, dict):
+                logger.info("🔍 Checking metadata...")
+                for field in ['image_url', 'url', 'image', 'file_url', 'download_url']:
+                    url = metadata.get(field)
+                    if url and isinstance(url, str) and url.startswith('http'):
+                        logger.info(f"✅ Found URL in metadata.{field}: {url[:100]}")
+                        return url
+
+            # STRATEGY 4: Direct Fields
+            logger.info("🔍 Checking direct fields...")
+            for field in ['image_url', 'image', 'url', 'file_url', 'media_url', 'download_url']:
+                url = response.get(field)
+                if url and isinstance(url, str) and url.startswith('http'):
+                    logger.info(f"✅ Found URL in {field}: {url[:100]}")
+                    return url
+
+            # STRATEGY 5: Constructed URLs
+            conversation_id = response.get("conversation_id")
+            if conversation_id and files:
+                logger.info("🔍 Constructing URLs...")
+                for file in files:
+                    file_id = file.get('id') or file.get('file_id')
+                    if file_id:
+                        base_url = self.base_url.replace("/v1", "").rstrip("/")
+                        urls = [
+                            f"{base_url}/files/conversations/{conversation_id}/files/{file_id}",
+                            f"{base_url}/files/{conversation_id}/{file_id}",
+                            f"{base_url}/v1/files/{file_id}",
+                        ]
+                        for url in urls:
+                            logger.info(f"   Trying: {url}")
+                            return url
+
+            # No URL found
+            logger.error("❌ No image URL found using any strategy")
+            logger.error(f"Keys: {list(response.keys())}, Files: {len(files)}, Answer: {len(answer)} chars")
             return None
 
         except Exception as e:
-            logger.error(f"Failed to parse image response: {str(e)}")
+            logger.error(f"💥 Error: {str(e)}")
+            logger.error(f"Response: {json.dumps(response, indent=2)[:1000]}")
             return None
 
-    def _generate_svg_placeholder(self, prompt: str) -> str:
-        """Generate a high-quality SVG placeholder image"""
-
-        # Extract key words from prompt for the placeholder
-        words = prompt.split()[:5]
-        title = ' '.join(words) if words else 'Ad Image'
-
-        # Create modern gradient colors based on prompt hash
-        prompt_hash = sum(ord(c) for c in prompt)
-        hue1 = (prompt_hash % 360)
-        hue2 = (hue1 + 60) % 360
-
-        svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-            <defs>
-                <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" style="stop-color:hsl({hue1}, 75%, 55%);stop-opacity:1" />
-                    <stop offset="100%" style="stop-color:hsl({hue2}, 75%, 65%);stop-opacity:1" />
-                </linearGradient>
-                <filter id="shadow">
-                    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.3"/>
-                </filter>
-            </defs>
-
-            <!-- Background -->
-            <rect width="1200" height="630" fill="url(#bg)"/>
-
-            <!-- Decorative circles -->
-            <circle cx="150" cy="150" r="80" fill="white" opacity="0.1"/>
-            <circle cx="1050" cy="480" r="100" fill="white" opacity="0.1"/>
-            <circle cx="950" cy="150" r="60" fill="white" opacity="0.15"/>
-
-            <!-- Content -->
-            <g filter="url(#shadow)">
-                <text x="600" y="280" font-family="Arial, sans-serif" font-size="42" font-weight="bold" 
-                      fill="white" text-anchor="middle" opacity="0.95">
-                    {title}
-                </text>
-                <text x="600" y="350" font-family="Arial, sans-serif" font-size="24" 
-                      fill="white" text-anchor="middle" opacity="0.85">
-                    Event-Driven Advertising
-                </text>
-            </g>
-
-            <!-- Brand element -->
-            <rect x="550" y="400" width="100" height="6" rx="3" fill="white" opacity="0.6"/>
-        </svg>'''
-
-        # Encode to base64
-        return base64.b64encode(svg.encode('utf-8')).decode('utf-8')
-
     def _parse_evaluation_response(self, response: Dict[str, Any]) -> Dict[str, Any]:
-        """Parse Dify evaluation response - STRICT JSON parsing"""
+        """Parse Dify evaluation response"""
 
         try:
             answer = response.get("answer", "{}").strip()
-
             if not answer:
-                raise ValueError("Empty evaluation response from Dify")
+                raise ValueError("Empty evaluation response")
 
-            logger.debug(f"Raw evaluation response: {answer[:500]}")
-
-            # Find JSON in response
             json_start = answer.find('{')
             json_end = answer.rfind('}')
-
             if json_start == -1 or json_end == -1:
-                raise ValueError("No JSON object found in evaluation response")
+                raise ValueError("No JSON in evaluation response")
 
-            json_str = answer[json_start:json_end + 1]
+            parsed = json.loads(answer[json_start:json_end + 1])
 
-            try:
-                parsed = json.loads(json_str)
-            except json.JSONDecodeError as e:
-                logger.error(f"Evaluation JSON decode error: {str(e)}")
-                raise ValueError(f"Invalid JSON in evaluation: {str(e)}")
-
-            # Validate and fix scores
-            score_fields = ['relevance_score', 'clarity_score', 'persuasiveness_score', 'brand_safety_score',
-                            'overall_score']
-            for field in score_fields:
+            # Validate scores
+            for field in ['relevance_score', 'clarity_score', 'persuasiveness_score',
+                          'brand_safety_score', 'overall_score']:
                 if field not in parsed:
                     parsed[field] = 5.0
                 else:
-                    # Ensure scores are float and within 0-10 range
-                    try:
-                        score = float(parsed[field])
-                        parsed[field] = max(0.0, min(10.0, score))
-                    except (ValueError, TypeError):
-                        parsed[field] = 5.0
+                    parsed[field] = max(0.0, min(10.0, float(parsed[field])))
 
-            # Ensure feedback and recommendations exist
-            if 'feedback' not in parsed or not parsed['feedback']:
-                parsed['feedback'] = 'Evaluation completed successfully'
-
+            if 'feedback' not in parsed:
+                parsed['feedback'] = 'Evaluation completed'
             if 'recommendations' not in parsed:
                 parsed['recommendations'] = []
-            elif not isinstance(parsed['recommendations'], list):
-                parsed['recommendations'] = []
 
-            logger.info("Successfully parsed Dify evaluation response")
             return parsed
 
         except Exception as e:
-            logger.error(f"Failed to parse evaluation response: {str(e)}")
+            logger.error(f"Failed to parse evaluation: {str(e)}")
             raise ValueError(f"Unable to parse evaluation: {str(e)}")

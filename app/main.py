@@ -126,11 +126,18 @@ app.include_router(api_router, prefix=settings.API_PREFIX)
 PROJECT_ROOT = Path(__file__).parent.parent
 LANDING_PATH = PROJECT_ROOT / "eventaic-frontend" / "landing"
 APP_PATH = PROJECT_ROOT / "eventaic-frontend" / "app" / "dist"
+STATIC_PATH = PROJECT_ROOT / "static"
+
+# Ensure static directory exists
+STATIC_PATH.mkdir(exist_ok=True)
+(STATIC_PATH / "images" / "ads").mkdir(parents=True, exist_ok=True)
+
+# Mount static files for images
+app.mount("/static", StaticFiles(directory=str(STATIC_PATH)), name="static")
 
 # Mount static files for landing page assets
 if LANDING_PATH.exists():
     app.mount("/assets", StaticFiles(directory=str(LANDING_PATH / "assets")), name="landing_assets")
-
 # Mount Vue app static files if built
 if APP_PATH.exists():
     app.mount("/app/assets", StaticFiles(directory=str(APP_PATH / "assets")), name="app_assets")

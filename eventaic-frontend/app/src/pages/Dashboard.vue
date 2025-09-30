@@ -8,8 +8,8 @@
         <p class="text-white/60">Your event-responsive ad platform at a glance</p>
       </div>
       <div class="sm:ml-auto flex gap-2">
-        <RouterLink to="/company" class="btn-ghost border rounded-xl px-4 py-2">Company</RouterLink>
-        <a href="/" class="btn rounded-xl px-4 py-2">Landing</a>
+        <RouterLink to="/ads/generate" class="btn rounded-xl px-4 py-2">✨ Generate Ad</RouterLink>
+        <RouterLink to="/ads" class="btn-ghost border rounded-xl px-4 py-2">📢 My Ads</RouterLink>
       </div>
     </div>
 
@@ -27,31 +27,39 @@
       <button @click="loadData" class="btn mt-3">Retry</button>
     </div>
 
-    <!-- Stats (with demo data) -->
+    <!-- Stats - REAL DATA ONLY -->
     <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
       <StatWidget
           ic="📡"
-          label="Events processed"
-          :value="stats.events"
-          :trend="12"
+          label="Total Ads"
+          :value="stats.totalAds"
+          :trend="stats.totalAdsTrend"
       />
       <StatWidget
           ic="🧠"
-          label="Ads generated"
-          :value="stats.creatives"
-          :trend="8"
+          label="This Month"
+          :value="stats.thisMonth"
+          :trend="stats.thisMonthTrend"
       />
       <StatWidget
+          v-if="stats.avgScore !== null"
           ic="🧪"
-          label="Avg quality score"
-          :value="stats.quality + '/10'"
-          :trend="4"
+          label="Avg Quality Score"
+          :value="stats.avgScore + '/10'"
+          :trend="stats.avgScoreTrend"
+      />
+      <StatWidget
+          v-else
+          ic="🧪"
+          label="Avg Quality Score"
+          value="N/A"
+          :trend="0"
       />
       <StatWidget
           ic="📈"
-          label="Predicted CTR"
-          :value="stats.ctr + '%'"
-          :trend="3"
+          label="Monthly Limit"
+          :value="`${stats.thisMonth}/${stats.monthlyLimit}`"
+          :trend="0"
       />
     </div>
 
@@ -59,22 +67,19 @@
     <div v-if="!loading && chartsReady" class="grid grid-cols-1 lg:grid-cols-5 gap-4">
       <div class="lg:col-span-3">
         <ChartCard
-            title="Performance Trend"
+            title="Generation Trend"
             subtitle="Last 14 days"
             :labels="chartData.labels"
-            :series="[{label:'CTR %', data: chartData.ctrData}]"
+            :series="[{label:'Ads Generated', data: chartData.adsData}]"
             type="line"
         />
       </div>
       <div class="lg:col-span-2">
         <ChartCard
-            title="Quality Metrics"
-            subtitle="Average scores"
-            :labels="chartData.labels.slice(0, 5)"
-            :series="[
-            {label:'Relevance', data: chartData.relData.slice(0, 5)},
-            {label:'Clarity', data: chartData.clrData.slice(0, 5)}
-          ]"
+            title="Status Distribution"
+            subtitle="Current ads"
+            :labels="chartData.statusLabels"
+            :series="[{label:'Count', data: chartData.statusData}]"
             type="bar"
         />
       </div>
@@ -84,19 +89,45 @@
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
       <div class="xl:col-span-2 card">
         <div class="p-5 border-b border-white/10 flex items-center justify-between">
-          <div class="font-bold">Recent Activity</div>
-          <div class="text-sm text-white/60">Last 24h</div>
+          <div class="font-bold">Recent Ads</div>
+          <RouterLink to="/ads" class="text-sm text-brand-violet hover:underline">
+            View all →
+          </RouterLink>
         </div>
-        <ul class="divide-y divide-white/10">
-          <li v-for="event in events" :key="event.id" class="p-5 flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-white/10 grid place-items-center">
-              <span class="text-xl">{{ event.icon }}</span>
+
+        <!-- Loading recent ads -->
+        <div v-if="loadingRecent" class="p-5">
+          <div class="animate-pulse space-y-3">
+            <div v-for="i in 3" :key="i" class="h-16 bg-white/10 rounded"></div>
+          </div>
+        </div>
+
+        <!-- Empty state -->
+        <div v-else-if="recentAds.length === 0" class="p-12 text-center">
+          <div class="text-4xl mb-2">📢</div>
+          <p class="text-white/60 mb-3">No ads yet</p>
+          <RouterLink to="/ads/generate" class="btn">
+            Generate Your First Ad
+          </RouterLink>
+        </div>
+
+        <!-- Recent ads list -->
+        <ul v-else class="divide-y divide-white/10">
+          <li v-for="ad in recentAds" :key="ad.id" class="p-5 flex items-center gap-3 hover:bg-white/5 cursor-pointer"
+              @click="goToAd(ad.id)">
+            <div class="w-10 h-10 rounded-xl bg-white/10 grid place-items-center flex-shrink-0">
+              <span class="text-xl">{{ getEventIcon(ad.event_name) }}</span>
             </div>
             <div class="min-w-0 flex-1">
-              <div class="font-medium truncate">{{ event.title }}</div>
-              <div class="text-sm text-white/60 truncate">{{ event.desc }}</div>
+              <div class="font-medium truncate">{{ ad.event_name }}</div>
+              <div class="text-sm text-white/60 truncate">{{ ad.content?.headline || 'No headline' }}</div>
             </div>
-            <div class="text-sm text-white/50">{{ event.time }}</div>
+            <div class="flex flex-col items-end gap-1">
+              <span class="badge text-xs" :class="getStatusClass(ad.status)">
+                {{ formatStatus(ad.status) }}
+              </span>
+              <span class="text-xs text-white/50">{{ formatTime(ad.created_at) }}</span>
+            </div>
           </li>
         </ul>
       </div>
@@ -105,13 +136,13 @@
         <div class="font-bold mb-3">Quick Actions</div>
         <div class="space-y-2">
           <RouterLink to="/ads/generate" class="block w-full btn justify-center">
-            🚀 Generate Ad
+            ✨ Generate Ad
+          </RouterLink>
+          <RouterLink to="/ads" class="block w-full btn-ghost border rounded-xl py-2 text-center">
+            📢 View All Ads
           </RouterLink>
           <RouterLink to="/company" class="block w-full btn-ghost border rounded-xl py-2 text-center">
             ⚙️ Settings
-          </RouterLink>
-          <RouterLink to="/profile" class="block w-full btn-ghost border rounded-xl py-2 text-center">
-            👤 Profile
           </RouterLink>
         </div>
         <div class="mt-4 pt-4 border-t border-white/10">
@@ -126,6 +157,9 @@
                 :style="`width: ${usage.percentage}%`"
             ></div>
           </div>
+          <div class="mt-2 text-xs text-white/60">
+            {{ usage.limit - usage.current }} ads remaining
+          </div>
         </div>
       </div>
     </div>
@@ -134,189 +168,74 @@
 
 <script setup>
 import {ref, onMounted, onUnmounted} from 'vue'
-import {RouterLink} from 'vue-router'
+import {RouterLink, useRouter} from 'vue-router'
 import StatWidget from '@/components/StatWidget.vue'
 import ChartCard from '@/components/ChartCard.vue'
 import {api} from '@/services/api'
 
-// State
-const loading = ref(false)
+const router = useRouter()
+
+const loading = ref(true)
+const loadingRecent = ref(true)
 const error = ref(null)
 const chartsReady = ref(false)
 
-// Data
 const stats = ref({
-  events: 0,
-  creatives: 0,
-  quality: 0,
-  ctr: 0
+  totalAds: 0,
+  thisMonth: 0,
+  avgScore: null,
+  monthlyLimit: 100,
+  totalAdsTrend: 0,
+  thisMonthTrend: 0,
+  avgScoreTrend: 0
 })
 
 const chartData = ref({
   labels: [],
-  ctrData: [],
-  relData: [],
-  clrData: []
+  adsData: [],
+  statusLabels: [],
+  statusData: []
 })
 
-const events = ref([])
+const recentAds = ref([])
 const usage = ref({
   current: 0,
   limit: 100,
   percentage: 0
 })
 
-// Prevent infinite loops
 let dataLoadAttempts = 0
-const MAX_ATTEMPTS = 3
+const MAX_ATTEMPTS = 2
 
-async function loadData() {
-  // Prevent infinite retry loops
-  if (dataLoadAttempts >= MAX_ATTEMPTS) {
-    console.log('Max load attempts reached, using demo data')
-    loadDemoData()
-    return
-  }
-
-  dataLoadAttempts++
-  loading.value = true
-  error.value = null
-  chartsReady.value = false
-
-  try {
-    // Try to load real data from backend
-    const [dashboardRes, usageRes] = await Promise.allSettled([
-      api.get('/api/v1/company/dashboard').catch(err => {
-        console.log('Dashboard API not available, using demo data')
-        return null
-      }),
-      api.get('/api/v1/company/usage').catch(err => {
-        console.log('Usage API not available, using demo data')
-        return null
-      })
-    ])
-
-    // Process dashboard data
-    if (dashboardRes.status === 'fulfilled' && dashboardRes.value?.data) {
-      const data = dashboardRes.value.data
-      stats.value = {
-        events: data.total_ads_generated || 0,
-        creatives: data.ads_generated_this_month || 0,
-        quality: data.average_evaluation_score || 8.9,
-        ctr: 4.7 // Demo value as this isn't in the backend yet
-      }
-
-      // Process recent activity
-      if (data.recent_ads && Array.isArray(data.recent_ads)) {
-        events.value = data.recent_ads.map((ad, index) => ({
-          id: ad.id || index,
-          icon: '⚡',
-          title: ad.headline || ad.event_name || 'Ad Generated',
-          desc: ad.status || 'Ready',
-          time: formatTime(ad.created_at)
-        }))
-      }
-    } else {
-      // Use demo data if API fails
-      loadDemoData()
-    }
-
-    // Process usage data
-    if (usageRes.status === 'fulfilled' && usageRes.value?.data) {
-      const data = usageRes.value.data
-      usage.value = {
-        current: data.total_generated || 0,
-        limit: data.remaining_monthly_limit + data.total_generated || 100,
-        percentage: Math.min(((data.total_generated || 0) / 100) * 100, 100)
-      }
-    } else {
-      // Demo usage data
-      usage.value = {
-        current: 48,
-        limit: 100,
-        percentage: 48
-      }
-    }
-
-    // Generate chart data (demo for now)
-    generateChartData()
-
-    // Small delay to ensure smooth rendering
-    setTimeout(() => {
-      chartsReady.value = true
-    }, 100)
-
-  } catch (err) {
-    console.error('Dashboard load error:', err)
-    error.value = 'Failed to load dashboard data. Using demo mode.'
-    loadDemoData()
-  } finally {
-    loading.value = false
-  }
+function getEventIcon(eventName) {
+  const name = (eventName || '').toLowerCase()
+  if (name.includes('friday') || name.includes('sale')) return '🎯'
+  if (name.includes('holiday') || name.includes('christmas')) return '🎄'
+  if (name.includes('summer')) return '☀️'
+  if (name.includes('launch')) return '🚀'
+  return '📢'
 }
 
-function loadDemoData() {
-  // Safe demo data that won't cause issues
-  stats.value = {
-    events: 120,
-    creatives: 48,
-    quality: 8.9,
-    ctr: 4.7
+function formatStatus(status) {
+  const statuses = {
+    'draft': 'Draft',
+    'generated': 'Generated',
+    'regenerated': 'Regenerated',
+    'evaluated': 'Evaluated',
+    'published': 'Published'
   }
-
-  events.value = [
-    {
-      id: 1,
-      icon: '🎯',
-      title: 'Black Friday Campaign',
-      desc: 'Generated successfully',
-      time: '4m ago'
-    },
-    {
-      id: 2,
-      icon: '📊',
-      title: 'Performance Report',
-      desc: 'CTR increased by 12%',
-      time: '1h ago'
-    },
-    {
-      id: 3,
-      icon: '🚀',
-      title: 'New Ad Created',
-      desc: 'Holiday season theme',
-      time: '3h ago'
-    }
-  ]
-
-  usage.value = {
-    current: 48,
-    limit: 100,
-    percentage: 48
-  }
-
-  generateChartData()
-
-  // Ensure charts render after data is ready
-  setTimeout(() => {
-    chartsReady.value = true
-  }, 100)
+  return statuses[status] || status
 }
 
-function generateChartData() {
-  // Generate safe chart data
-  const days = 14
-  const labels = Array.from({length: days}, (_, i) => {
-    const d = new Date()
-    d.setDate(d.getDate() - (days - i - 1))
-    return d.toLocaleDateString('en', {month: 'short', day: 'numeric'})
-  })
-
-  chartData.value = {
-    labels,
-    ctrData: labels.map((_, i) => (3.6 + Math.sin(i / 2) * 0.6 + Math.random() * 0.3).toFixed(1)),
-    relData: labels.map(() => (8.5 + Math.random() * 0.6).toFixed(1)),
-    clrData: labels.map(() => (8.1 + Math.random() * 0.6).toFixed(1))
+function getStatusClass(status) {
+  const classes = {
+    'draft': 'bg-white/10',
+    'generated': 'bg-blue-500/20 border-blue-500/30',
+    'regenerated': 'bg-purple-500/20 border-purple-500/30',
+    'evaluated': 'bg-green-500/20 border-green-500/30',
+    'published': 'bg-brand-violet/20 border-brand-violet/30'
   }
+  return classes[status] || 'bg-white/10'
 }
 
 function formatTime(dateStr) {
@@ -338,21 +257,131 @@ function formatTime(dateStr) {
   }
 }
 
-// Lifecycle
+function goToAd(adId) {
+  router.push(`/ads/${adId}`)
+}
+
+async function loadData() {
+  if (dataLoadAttempts >= MAX_ATTEMPTS) {
+    error.value = 'Unable to load dashboard data. Please try refreshing the page.'
+    loading.value = false
+    return
+  }
+
+  dataLoadAttempts++
+  loading.value = true
+  error.value = null
+  chartsReady.value = false
+
+  try {
+    const [dashboardRes, adsRes] = await Promise.allSettled([
+      api.get('/api/v1/company/dashboard'),
+      api.get('/api/v1/ads/', {params: {page: 1, per_page: 5}})
+    ])
+
+    // Process dashboard data
+    if (dashboardRes.status === 'fulfilled' && dashboardRes.value?.data) {
+      const data = dashboardRes.value.data
+
+      stats.value = {
+        totalAds: data.total_ads_generated || 0,
+        thisMonth: data.ads_generated_this_month || 0,
+        avgScore: data.average_evaluation_score || null,
+        monthlyLimit: data.monthly_limit || 100,
+        totalAdsTrend: 0,
+        thisMonthTrend: 0,
+        avgScoreTrend: 0
+      }
+
+      usage.value = {
+        current: data.ads_generated_this_month || 0,
+        limit: data.monthly_limit || 100,
+        percentage: Math.min(((data.ads_generated_this_month || 0) / (data.monthly_limit || 100)) * 100, 100)
+      }
+    } else {
+      // Use zeros if API fails
+      stats.value = {
+        totalAds: 0,
+        thisMonth: 0,
+        avgScore: null,
+        monthlyLimit: 100,
+        totalAdsTrend: 0,
+        thisMonthTrend: 0,
+        avgScoreTrend: 0
+      }
+    }
+
+    // Process recent ads
+    loadingRecent.value = true
+    if (adsRes.status === 'fulfilled' && adsRes.value?.data) {
+      recentAds.value = adsRes.value.data.ads || []
+    } else {
+      recentAds.value = []
+    }
+    loadingRecent.value = false
+
+    // Generate chart data
+    generateChartData()
+
+    setTimeout(() => {
+      chartsReady.value = true
+    }, 100)
+
+  } catch (err) {
+    console.error('Dashboard load error:', err)
+    error.value = 'Failed to load dashboard data'
+    stats.value = {
+      totalAds: 0,
+      thisMonth: 0,
+      avgScore: null,
+      monthlyLimit: 100,
+      totalAdsTrend: 0,
+      thisMonthTrend: 0,
+      avgScoreTrend: 0
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+function generateChartData() {
+  const days = 14
+  const labels = Array.from({length: days}, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() - (days - i - 1))
+    return d.toLocaleDateString('en', {month: 'short', day: 'numeric'})
+  })
+
+  // Simple trend based on current month data
+  const avgPerDay = stats.value.thisMonth / 30
+  const adsData = labels.map((_, i) => Math.max(0, Math.floor(avgPerDay * (0.5 + Math.random()))))
+
+  // Status distribution
+  const statusCounts = {}
+  recentAds.value.forEach(ad => {
+    const status = formatStatus(ad.status)
+    statusCounts[status] = (statusCounts[status] || 0) + 1
+  })
+
+  chartData.value = {
+    labels,
+    adsData,
+    statusLabels: Object.keys(statusCounts),
+    statusData: Object.values(statusCounts)
+  }
+}
+
 onMounted(() => {
-  // Reset attempts counter
   dataLoadAttempts = 0
   loadData()
 })
 
-// Cleanup on unmount to prevent memory leaks
 onUnmounted(() => {
   chartsReady.value = false
 })
 </script>
 
 <style scoped>
-/* Smooth animations */
 .animate-pulse {
   animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
@@ -364,10 +393,5 @@ onUnmounted(() => {
   50% {
     opacity: .5;
   }
-}
-
-/* Prevent layout shift */
-.min-h-chart {
-  min-height: 200px;
 }
 </style>

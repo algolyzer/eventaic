@@ -28,21 +28,21 @@ class AuthService:
         if not text:
             return text
         # Remove potentially dangerous characters
-        dangerous_chars = ['<', '>', '"', "'", '&', '/', '\\', ';']
+        dangerous_chars = ["<", ">", '"', "'", "&", "/", "\\", ";"]
         sanitized = text
         for char in dangerous_chars:
-            sanitized = sanitized.replace(char, '')
+            sanitized = sanitized.replace(char, "")
         return sanitized.strip()
 
     def _validate_email_format(self, email: str) -> bool:
         """Validate email format"""
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         return bool(re.match(pattern, email))
 
     def _validate_username_format(self, username: str) -> bool:
         """Validate username format"""
         # 3-50 chars, alphanumeric, underscore, hyphen only
-        pattern = r'^[a-zA-Z0-9_-]{3,50}$'
+        pattern = r"^[a-zA-Z0-9_-]{3,50}$"
         return bool(re.match(pattern, username))
 
     async def create_user(self, request: RegisterRequest) -> User:
@@ -52,15 +52,21 @@ class AuthService:
             # Sanitize inputs
             email = self._sanitize_input(request.email.lower())
             username = self._sanitize_input(request.username)
-            full_name = self._sanitize_input(request.full_name) if request.full_name else None
-            company_name = self._sanitize_input(request.company_name)  # Always required now
+            full_name = (
+                self._sanitize_input(request.full_name) if request.full_name else None
+            )
+            company_name = self._sanitize_input(
+                request.company_name
+            )  # Always required now
 
             # Validate formats
             if not self._validate_email_format(email):
                 raise ValueError("Invalid email format")
 
             if not self._validate_username_format(username):
-                raise ValueError("Username must be 3-50 characters, alphanumeric with _ or - only")
+                raise ValueError(
+                    "Username must be 3-50 characters, alphanumeric with _ or - only"
+                )
 
             # Check if user already exists
             if self.user_repository.get_by_email(email):
@@ -75,10 +81,7 @@ class AuthService:
             # Always create or get company for regular registration
             company = self.company_repository.get_by_name(company_name)
             if not company:
-                company = Company(
-                    name=company_name,
-                    email=email
-                )
+                company = Company(name=company_name, email=email)
                 self.db.add(company)
                 self.db.flush()
                 logger.info(f"New company created: {company.name}")
@@ -92,20 +95,24 @@ class AuthService:
                 hashed_password=hashed_password,
                 role=UserRole.COMPANY,  # Always COMPANY for public registration
                 company_id=company.id,
-                is_email_verified=not settings.EMAIL_VERIFICATION_REQUIRED
+                is_email_verified=not settings.EMAIL_VERIFICATION_REQUIRED,
             )
 
             # Generate email verification token if required
             if settings.EMAIL_VERIFICATION_REQUIRED:
                 verification_token = self.security.generate_token()
-                user.email_verification_token = self.security.hash_token(verification_token)
+                user.email_verification_token = self.security.hash_token(
+                    verification_token
+                )
                 user.email_verification_sent_at = datetime.utcnow()
 
             self.db.add(user)
             self.db.commit()
             self.db.refresh(user)
 
-            logger.info(f"New user created: {user.id} ({user.email}) for company {company.name}")
+            logger.info(
+                f"New user created: {user.id} ({user.email}) for company {company.name}"
+            )
             return user
 
         except ValueError as e:
@@ -172,7 +179,9 @@ class AuthService:
 
         return user
 
-    def authenticate_user_flexible(self, identifier: str, password: str) -> Optional[User]:
+    def authenticate_user_flexible(
+        self, identifier: str, password: str
+    ) -> Optional[User]:
         """
         Authenticate user by either username or email - with enhanced security
         Tries email first if @ is present, otherwise username
@@ -181,7 +190,7 @@ class AuthService:
         identifier = self._sanitize_input(identifier)
 
         # Determine if identifier looks like an email
-        if '@' in identifier:
+        if "@" in identifier:
             # Try email first, then username as fallback
             user = self.authenticate_user_by_email(identifier, password)
             if not user:
@@ -203,7 +212,7 @@ class AuthService:
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         )
 
     def validate_refresh_token(self, refresh_token: str) -> Optional[User]:
@@ -244,9 +253,11 @@ class AuthService:
         """Reset user password with token"""
         hashed_token = self.security.hash_token(token)
 
-        user = self.db.query(User).filter(
-            User.password_reset_token == hashed_token
-        ).first()
+        user = (
+            self.db.query(User)
+            .filter(User.password_reset_token == hashed_token)
+            .first()
+        )
 
         if not user:
             logger.warning("Invalid password reset token used")
@@ -272,9 +283,11 @@ class AuthService:
         """Verify user email with token"""
         hashed_token = self.security.hash_token(token)
 
-        user = self.db.query(User).filter(
-            User.email_verification_token == hashed_token
-        ).first()
+        user = (
+            self.db.query(User)
+            .filter(User.email_verification_token == hashed_token)
+            .first()
+        )
 
         if not user:
             logger.warning("Invalid email verification token used")
@@ -282,7 +295,9 @@ class AuthService:
 
         # Check if token is expired (48 hours)
         if user.email_verification_sent_at:
-            if datetime.utcnow() - user.email_verification_sent_at > timedelta(hours=48):
+            if datetime.utcnow() - user.email_verification_sent_at > timedelta(
+                hours=48
+            ):
                 logger.warning(f"Expired email verification token for user: {user.id}")
                 return False
 

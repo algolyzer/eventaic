@@ -14,7 +14,7 @@ from app.schemas.response import (
     AdminDashboardResponse,
     CompanyListResponse,
     AdminStatisticsResponse,
-    CompanyDetailResponse
+    CompanyDetailResponse,
 )
 
 from app.schemas.user import UserCreate
@@ -31,8 +31,7 @@ router = APIRouter(prefix="/admin", tags=["Admin"])
 
 @router.get("/dashboard", response_model=AdminDashboardResponse)
 async def get_admin_dashboard(
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    current_user: User = Depends(get_super_admin), db: Session = Depends(get_db)
 ):
     """Get admin dashboard overview"""
 
@@ -45,22 +44,19 @@ async def get_admin_dashboard(
 
 @router.get("/companies", response_model=CompanyListResponse)
 async def list_companies(
-        page: int = Query(1, ge=1),
-        per_page: int = Query(20, ge=1, le=100),
-        search: Optional[str] = None,
-        is_active: Optional[bool] = None,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    is_active: Optional[bool] = None,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """List all companies with pagination"""
 
     admin_service = AdminService(db)
 
     companies = admin_service.get_companies(
-        page=page,
-        per_page=per_page,
-        search=search,
-        is_active=is_active
+        page=page, per_page=per_page, search=search, is_active=is_active
     )
 
     return companies
@@ -68,9 +64,9 @@ async def list_companies(
 
 @router.get("/companies/{company_id}", response_model=CompanyDetailResponse)
 async def get_company_detail(
-        company_id: UUID,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    company_id: UUID,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Get detailed information about a specific company"""
 
@@ -80,8 +76,7 @@ async def get_company_detail(
 
     if not company:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Company not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
         )
 
     return company
@@ -89,11 +84,11 @@ async def get_company_detail(
 
 @router.get("/statistics", response_model=AdminStatisticsResponse)
 async def get_statistics(
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        company_id: Optional[UUID] = None,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    company_id: Optional[UUID] = None,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Get platform statistics"""
 
@@ -106,9 +101,7 @@ async def get_statistics(
         start_date = end_date - timedelta(days=30)
 
     stats = admin_service.get_statistics(
-        start_date=start_date,
-        end_date=end_date,
-        company_id=company_id
+        start_date=start_date, end_date=end_date, company_id=company_id
     )
 
     return stats
@@ -116,9 +109,9 @@ async def get_statistics(
 
 @router.post("/companies/{company_id}/activate")
 async def activate_company(
-        company_id: UUID,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    company_id: UUID,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Activate a company"""
 
@@ -128,8 +121,7 @@ async def activate_company(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Company not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
         )
 
     return {"message": "Company activated successfully"}
@@ -137,9 +129,9 @@ async def activate_company(
 
 @router.post("/companies/{company_id}/deactivate")
 async def deactivate_company(
-        company_id: UUID,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    company_id: UUID,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Deactivate a company"""
 
@@ -149,8 +141,7 @@ async def deactivate_company(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Company not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
         )
 
     return {"message": "Company deactivated successfully"}
@@ -158,10 +149,10 @@ async def deactivate_company(
 
 @router.put("/companies/{company_id}/limits")
 async def update_company_limits(
-        company_id: UUID,
-        monthly_limit: int = Query(..., ge=0, le=10000),
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    company_id: UUID,
+    monthly_limit: int = Query(..., ge=0, le=10000),
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Update company's monthly ad generation limit"""
 
@@ -171,8 +162,7 @@ async def update_company_limits(
 
     if not success:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Company not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Company not found"
         )
 
     return {"message": f"Monthly limit updated to {monthly_limit}"}
@@ -180,30 +170,26 @@ async def update_company_limits(
 
 @router.get("/users")
 async def list_all_users(
-        page: int = Query(1, ge=1),
-        per_page: int = Query(20, ge=1, le=100),
-        search: Optional[str] = None,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=100),
+    search: Optional[str] = None,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """List all users with pagination (admin only)"""
 
     admin_service = AdminService(db)
 
-    users = admin_service.get_all_users(
-        page=page,
-        per_page=per_page,
-        search=search
-    )
+    users = admin_service.get_all_users(page=page, per_page=per_page, search=search)
 
     return users
 
 
 @router.post("/users")
 async def create_user_by_admin(
-        user_data: UserCreate,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    user_data: UserCreate,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Create a new user (admin only)"""
 
@@ -215,40 +201,39 @@ async def create_user_by_admin(
         email = user_data.email.strip().lower()
         username = user_data.username.strip()
         full_name = user_data.full_name.strip() if user_data.full_name else None
-        company_name = user_data.company_name.strip() if user_data.company_name else None
+        company_name = (
+            user_data.company_name.strip() if user_data.company_name else None
+        )
 
         # Check if user already exists
         if auth_service.get_user_by_email(email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
+                detail="Email already registered",
             )
 
         if auth_service.get_user_by_username(username):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already taken"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
             )
 
         # Validate password strength
         if len(user_data.password) < 8:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password must be at least 8 characters long"
+                detail="Password must be at least 8 characters long",
             )
 
         # Create or get company if company_name provided and not empty
         company = None
         if company_name:
             from app.repositories.company_repository import CompanyRepository
+
             company_repo = CompanyRepository(db)
             company = company_repo.get_by_name(company_name)
             if not company:
                 # Create new company
-                company = Company(
-                    name=company_name,
-                    email=email
-                )
+                company = Company(name=company_name, email=email)
                 db.add(company)
                 db.flush()
                 logger.info(f"New company created by admin: {company.name}")
@@ -266,7 +251,7 @@ async def create_user_by_admin(
             role=user_data.role,
             company_id=company.id if company else None,
             is_email_verified=True,  # Admin-created users are auto-verified
-            is_active=True
+            is_active=True,
         )
 
         db.add(user)
@@ -284,8 +269,8 @@ async def create_user_by_admin(
                 "full_name": user.full_name,
                 "role": user.role.value,
                 "company_id": str(user.company_id) if user.company_id else None,
-                "company_name": company.name if company else None
-            }
+                "company_name": company.name if company else None,
+            },
         }
 
     except HTTPException:
@@ -299,15 +284,15 @@ async def create_user_by_admin(
         logger.exception("Full traceback:")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create user: {str(e)}"
+            detail=f"Failed to create user: {str(e)}",
         )
 
 
 @router.post("/users/{user_id}/deactivate")
 async def deactivate_user(
-        user_id: UUID,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    user_id: UUID,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Deactivate a user"""
 
@@ -316,14 +301,13 @@ async def deactivate_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot deactivate your own account"
+            detail="You cannot deactivate your own account",
         )
 
     user.is_active = False
@@ -336,9 +320,9 @@ async def deactivate_user(
 
 @router.post("/users/{user_id}/activate")
 async def activate_user(
-        user_id: UUID,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    user_id: UUID,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Activate a user"""
 
@@ -347,8 +331,7 @@ async def activate_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     user.is_active = True
@@ -362,10 +345,10 @@ async def activate_user(
 
 @router.delete("/users/{user_id}")
 async def delete_user(
-        user_id: UUID,
-        permanent: bool = Query(False, description="Permanently delete user"),
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    user_id: UUID,
+    permanent: bool = Query(False, description="Permanently delete user"),
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Delete a user (soft delete by default, permanent if specified)"""
 
@@ -374,15 +357,14 @@ async def delete_user(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     # Prevent deleting yourself
     if user.id == current_user.id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="You cannot delete your own account"
+            detail="You cannot delete your own account",
         )
 
     if permanent:
@@ -397,7 +379,7 @@ async def delete_user(
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete user"
+                detail="Failed to delete user",
             )
         logger.info(f"User {user_id} soft deleted by admin {current_user.id}")
         return {"message": "User deleted successfully"}
@@ -405,9 +387,9 @@ async def delete_user(
 
 @router.get("/users/{user_id}")
 async def get_user_detail(
-        user_id: UUID,
-        current_user: User = Depends(get_super_admin),
-        db: Session = Depends(get_db)
+    user_id: UUID,
+    current_user: User = Depends(get_super_admin),
+    db: Session = Depends(get_db),
 ):
     """Get detailed user information"""
 
@@ -416,8 +398,7 @@ async def get_user_detail(
 
     if not user:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
 
     # Count user's ads
@@ -437,5 +418,5 @@ async def get_user_detail(
         "company_name": user.company.name if user.company else None,
         "total_ads_created": ad_count,
         "created_at": user.created_at.isoformat(),
-        "last_login": user.last_login.isoformat() if user.last_login else None
+        "last_login": user.last_login.isoformat() if user.last_login else None,
     }

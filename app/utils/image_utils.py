@@ -51,9 +51,7 @@ def get_image_url(ad_id: UUID, filename: str) -> str:
 
 
 async def download_image_from_url(
-        url: str,
-        ad_id: UUID,
-        original_filename: Optional[str] = None
+    url: str, ad_id: UUID, original_filename: Optional[str] = None
 ) -> Optional[tuple[str, str]]:
     """
     Download image from URL and save to static directory
@@ -74,7 +72,9 @@ async def download_image_from_url(
 
         # Download the image
         async with aiohttp.ClientSession() as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as response:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
                 if response.status != 200:
                     logger.error(f"Failed to download image: HTTP {response.status}")
                     return None
@@ -91,14 +91,16 @@ async def download_image_from_url(
                     original_filename = f"{content_hash}.png"
 
                 # Ensure extension
-                if not original_filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
-                    original_filename += '.png'
+                if not original_filename.lower().endswith(
+                    (".png", ".jpg", ".jpeg", ".webp", ".gif")
+                ):
+                    original_filename += ".png"
 
                 # Get save path
                 save_path = get_image_path(ad_id, original_filename)
 
                 # Save the image
-                async with aiofiles.open(save_path, 'wb') as f:
+                async with aiofiles.open(save_path, "wb") as f:
                     await f.write(image_data)
 
                 # Get public URL
@@ -136,6 +138,7 @@ async def delete_ad_images(ad_id: UUID) -> bool:
 
         if ad_dir.exists():
             import shutil
+
             shutil.rmtree(ad_dir)
             logger.info(f"Deleted images directory for ad: {ad_id}")
             return True

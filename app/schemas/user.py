@@ -25,10 +25,10 @@ class UserProfileUpdate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=255)
     phone: Optional[str] = Field(None, max_length=20)
 
-    @field_validator('phone')
+    @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: Optional[str]) -> Optional[str]:
-        if v and not v.replace('+', '').replace('-', '').replace(' ', '').isdigit():
+        if v and not v.replace("+", "").replace("-", "").replace(" ", "").isdigit():
             raise ValueError("Invalid phone number format")
         return v
 

@@ -7,9 +7,7 @@ import os
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
-        case_sensitive=True,
-        env_file_encoding='utf-8'
+        env_file=".env", case_sensitive=True, env_file_encoding="utf-8"
     )
 
     # App Settings
@@ -22,7 +20,7 @@ class Settings(BaseSettings):
     # Security - CRITICAL: Must be set in production .env
     SECRET_KEY: str = os.getenv(
         "SECRET_KEY",
-        secrets.token_urlsafe(32)  # Only for dev, MUST override in production
+        secrets.token_urlsafe(32),  # Only for dev, MUST override in production
     )
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -44,7 +42,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: List[str] = [
         "http://localhost:3000",
         "http://localhost:5173",
-        "http://localhost:8080"
+        "http://localhost:8080",
     ]
     # For production, use:
     # ALLOWED_ORIGINS: List[str] = ["https://yourdomain.com"]
@@ -71,7 +69,12 @@ class Settings(BaseSettings):
 
     # File Upload
     MAX_UPLOAD_SIZE: int = 10 * 1024 * 1024  # 10MB
-    ALLOWED_IMAGE_TYPES: List[str] = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    ALLOWED_IMAGE_TYPES: List[str] = [
+        "image/jpeg",
+        "image/png",
+        "image/webp",
+        "image/gif",
+    ]
     UPLOAD_DIR: str = "static/images/ads"
 
     # Rate Limiting
@@ -137,12 +140,21 @@ class Settings(BaseSettings):
 
         if self.is_production:
             # Check SECRET_KEY
-            if self.SECRET_KEY == secrets.token_urlsafe(32) or len(self.SECRET_KEY) < 32:
-                warnings.append("⚠️ SECRET_KEY must be set to a strong random value in production")
+            if (
+                self.SECRET_KEY == secrets.token_urlsafe(32)
+                or len(self.SECRET_KEY) < 32
+            ):
+                warnings.append(
+                    "⚠️ SECRET_KEY must be set to a strong random value in production"
+                )
 
             # Check CORS
-            if any(origin.startswith("http://localhost") for origin in self.ALLOWED_ORIGINS):
-                warnings.append("⚠️ ALLOWED_ORIGINS contains localhost - update for production")
+            if any(
+                origin.startswith("http://localhost") for origin in self.ALLOWED_ORIGINS
+            ):
+                warnings.append(
+                    "⚠️ ALLOWED_ORIGINS contains localhost - update for production"
+                )
 
             # Check HTTPS
             if not self.ENABLE_HTTPS_REDIRECT:
@@ -154,7 +166,9 @@ class Settings(BaseSettings):
 
             # Check Database
             if "localhost" in self.DATABASE_URL:
-                warnings.append("⚠️ DATABASE_URL points to localhost - use production database")
+                warnings.append(
+                    "⚠️ DATABASE_URL points to localhost - use production database"
+                )
 
             # Check Email
             if self.EMAIL_VERIFICATION_REQUIRED and not self.SMTP_ENABLED:

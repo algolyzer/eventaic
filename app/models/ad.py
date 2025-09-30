@@ -1,4 +1,15 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Enum, ForeignKey, Text, JSON, Float, Integer
+from sqlalchemy import (
+    Column,
+    String,
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Text,
+    JSON,
+    Float,
+    Integer,
+)
 from sqlalchemy.dialects.postgresql import UUID, ARRAY
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -61,7 +72,9 @@ class Ad(Base):
     parent_ad = relationship("Ad", remote_side=[id], backref="regenerations")
 
     # FIXED: Cascade delete evaluations when ad is deleted
-    evaluations = relationship("AdEvaluation", back_populates="ad", cascade="all, delete-orphan")
+    evaluations = relationship(
+        "AdEvaluation", back_populates="ad", cascade="all, delete-orphan"
+    )
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -78,7 +91,9 @@ class AdEvaluation(Base):
     __tablename__ = "ad_evaluations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    ad_id = Column(UUID(as_uuid=True), ForeignKey("ads.id", ondelete="CASCADE"), nullable=False)
+    ad_id = Column(
+        UUID(as_uuid=True), ForeignKey("ads.id", ondelete="CASCADE"), nullable=False
+    )
 
     # Evaluation scores
     relevance_score = Column(Float)

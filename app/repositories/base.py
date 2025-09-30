@@ -17,10 +17,7 @@ class BaseRepository(Generic[ModelType]):
         return self.db.query(self.model).filter(self.model.id == id).first()
 
     def get_multi(
-            self,
-            skip: int = 0,
-            limit: int = 100,
-            filters: Optional[Dict[str, Any]] = None
+        self, skip: int = 0, limit: int = 100, filters: Optional[Dict[str, Any]] = None
     ) -> List[ModelType]:
         query = self.db.query(self.model)
         if filters:

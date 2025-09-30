@@ -18,8 +18,7 @@ class Security:
 
     @staticmethod
     def create_access_token(
-            subject: Union[str, Any],
-            expires_delta: Optional[timedelta] = None
+        subject: Union[str, Any], expires_delta: Optional[timedelta] = None
     ) -> str:
         """Create JWT access token"""
         if expires_delta:
@@ -33,14 +32,12 @@ class Security:
             "exp": expire,
             "sub": str(subject),
             "type": "access",
-            "iat": datetime.utcnow()  # Issued at time
+            "iat": datetime.utcnow(),  # Issued at time
         }
 
         try:
             encoded_jwt = jwt.encode(
-                to_encode,
-                settings.SECRET_KEY,
-                algorithm=settings.ALGORITHM
+                to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
             )
             return encoded_jwt
         except Exception as e:
@@ -49,8 +46,7 @@ class Security:
 
     @staticmethod
     def create_refresh_token(
-            subject: Union[str, Any],
-            expires_delta: Optional[timedelta] = None
+        subject: Union[str, Any], expires_delta: Optional[timedelta] = None
     ) -> str:
         """Create JWT refresh token"""
         if expires_delta:
@@ -64,14 +60,12 @@ class Security:
             "exp": expire,
             "sub": str(subject),
             "type": "refresh",
-            "iat": datetime.utcnow()
+            "iat": datetime.utcnow(),
         }
 
         try:
             encoded_jwt = jwt.encode(
-                to_encode,
-                settings.SECRET_KEY,
-                algorithm=settings.ALGORITHM
+                to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
             )
             return encoded_jwt
         except Exception as e:
@@ -83,9 +77,7 @@ class Security:
         """Decode and validate JWT token"""
         try:
             payload = jwt.decode(
-                token,
-                settings.SECRET_KEY,
-                algorithms=[settings.ALGORITHM]
+                token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
             )
             return payload
         except JWTError as e:
@@ -121,7 +113,7 @@ class Security:
     @staticmethod
     def generate_verification_code(length: int = 6) -> str:
         """Generate numeric verification code"""
-        return ''.join(secrets.choice('0123456789') for _ in range(length))
+        return "".join(secrets.choice("0123456789") for _ in range(length))
 
     @staticmethod
     def hash_token(token: str) -> str:

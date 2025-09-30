@@ -41,7 +41,9 @@ class User(Base):
     last_login = Column(DateTime)
 
     # Relationships
-    ads = relationship("Ad", back_populates="created_by_user", cascade="all, delete-orphan")
+    ads = relationship(
+        "Ad", back_populates="created_by_user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self):
         return f"<User {self.email}>"

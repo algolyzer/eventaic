@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # Rate limiter
 limiter = Limiter(
     key_func=get_remote_address,
-    default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE}/minute"]
+    default_limits=[f"{settings.RATE_LIMIT_PER_MINUTE}/minute"],
 )
 
 
@@ -66,7 +66,7 @@ app = FastAPI(
     lifespan=lifespan,
     docs_url="/api/docs" if settings.DEBUG else None,  # Disable in production
     redoc_url="/api/redoc" if settings.DEBUG else None,
-    openapi_url="/api/openapi.json" if settings.DEBUG else None
+    openapi_url="/api/openapi.json" if settings.DEBUG else None,
 )
 
 
@@ -82,8 +82,7 @@ async def add_security_headers(request: Request, call_next):
         logger.error(f"Error processing request: {str(e)}")
         logger.error(traceback.format_exc())
         return JSONResponse(
-            status_code=500,
-            content={"detail": "Internal server error"}
+            status_code=500, content={"detail": "Internal server error"}
         )
 
     # Add security headers
@@ -95,7 +94,9 @@ async def add_security_headers(request: Request, call_next):
 
         if settings.is_production:
             # Strict Transport Security (HTTPS only)
-            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
 
             # Content Security Policy
             response.headers["Content-Security-Policy"] = (
@@ -131,7 +132,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-Request-ID", "X-Process-Time"]
+    expose_headers=["X-Request-ID", "X-Process-Time"],
 )
 
 # GZip compression
@@ -140,8 +141,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 # Trusted host middleware (production only)
 if settings.is_production:
     app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=["*"]  # Configure with your domain
+        TrustedHostMiddleware, allowed_hosts=["*"]  # Configure with your domain
     )
 
 # Rate limiting
@@ -154,30 +154,34 @@ if settings.RATE_LIMIT_ENABLED:
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Handle HTTP exceptions"""
-    logger.warning(f"HTTP {exc.status_code}: {request.method} {request.url.path} - {exc.detail}")
+    logger.warning(
+        f"HTTP {exc.status_code}: {request.method} {request.url.path} - {exc.detail}"
+    )
 
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "detail": exc.detail,
             "status_code": exc.status_code,
-            "path": str(request.url.path)
-        }
+            "path": str(request.url.path),
+        },
     )
 
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation errors"""
-    logger.warning(f"Validation error: {request.method} {request.url.path} - {exc.errors()}")
+    logger.warning(
+        f"Validation error: {request.method} {request.url.path} - {exc.errors()}"
+    )
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "detail": "Validation error",
             "errors": exc.errors(),
-            "body": exc.body if hasattr(exc, 'body') else None
-        }
+            "body": exc.body if hasattr(exc, "body") else None,
+        },
     )
 
 
@@ -187,7 +191,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     error_id = str(time.time())
     logger.error(
         f"Unhandled exception [{error_id}]: {request.method} {request.url.path}",
-        exc_info=True
+        exc_info=True,
     )
 
     # Don't expose internal errors in production
@@ -198,10 +202,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
     return JSONResponse(
         status_code=500,
-        content={
-            "detail": detail,
-            "error_id": error_id if settings.DEBUG else None
-        }
+        content={"detail": detail, "error_id": error_id if settings.DEBUG else None},
     )
 
 
@@ -212,6 +213,7 @@ async def health_check():
     try:
         # Test database connection
         from app.core.database import SessionLocal
+
         db = SessionLocal()
         db.execute("SELECT 1")
         db.close()
@@ -226,7 +228,7 @@ async def health_check():
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "database": db_status,
-        "timestamp": time.time()
+        "timestamp": time.time(),
     }
 
 
@@ -238,41 +240,40 @@ async def detailed_health_check():
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT,
         "timestamp": time.time(),
-        "services": {}
+        "services": {},
     }
 
     # Check database
     try:
         from app.core.database import SessionLocal
+
         db = SessionLocal()
         start = time.time()
         db.execute("SELECT 1")
         db.close()
         health_status["services"]["database"] = {
             "status": "healthy",
-            "response_time": time.time() - start
+            "response_time": time.time() - start,
         }
     except Exception as e:
-        health_status["services"]["database"] = {
-            "status": "unhealthy",
-            "error": str(e)
-        }
+        health_status["services"]["database"] = {"status": "unhealthy", "error": str(e)}
 
     # Check Redis (if enabled)
     if settings.REDIS_ENABLED and settings.REDIS_URL:
         try:
             import redis
+
             r = redis.from_url(settings.REDIS_URL)
             start = time.time()
             r.ping()
             health_status["services"]["redis"] = {
                 "status": "healthy",
-                "response_time": time.time() - start
+                "response_time": time.time() - start,
             }
         except Exception as e:
             health_status["services"]["redis"] = {
                 "status": "unhealthy",
-                "error": str(e)
+                "error": str(e),
             }
 
     # Overall status
@@ -290,7 +291,9 @@ async def detailed_health_check():
 async def favicon():
     """Serve favicon"""
     PROJECT_ROOT = Path(__file__).parent.parent
-    favicon_path = PROJECT_ROOT / "eventaic-frontend" / "landing" / "assets" / "favicon.ico"
+    favicon_path = (
+        PROJECT_ROOT / "eventaic-frontend" / "landing" / "assets" / "favicon.ico"
+    )
 
     if not favicon_path.exists():
         # Return simple SVG favicon
@@ -327,12 +330,19 @@ app.mount("/static", StaticFiles(directory=str(STATIC_PATH)), name="static")
 
 # Mount landing page assets
 if LANDING_PATH.exists():
-    app.mount("/assets", StaticFiles(directory=str(LANDING_PATH / "assets")), name="landing_assets")
+    app.mount(
+        "/assets",
+        StaticFiles(directory=str(LANDING_PATH / "assets")),
+        name="landing_assets",
+    )
 
 # Mount Vue app static files if built
 if APP_PATH.exists():
-    app.mount("/app/assets", StaticFiles(directory=str(APP_PATH / "assets")), name="app_assets")
-
+    app.mount(
+        "/app/assets",
+        StaticFiles(directory=str(APP_PATH / "assets")),
+        name="app_assets",
+    )
 
     @app.get("/app/{full_path:path}")
     async def serve_app(full_path: str):
@@ -342,14 +352,17 @@ if APP_PATH.exists():
             return FileResponse(str(index_file))
         return HTMLResponse(
             content="App not built. Run 'npm run build' in eventaic-frontend/app",
-            status_code=404
+            status_code=404,
         )
+
 else:
+
     @app.get("/app/{full_path:path}")
     async def redirect_to_dev(full_path: str):
         """Redirect to Vite dev server in development"""
         if settings.is_development:
-            return HTMLResponse(content=f"""
+            return HTMLResponse(
+                content=f"""
             <html>
                 <head>
                     <meta http-equiv="refresh" content="0; url=http://localhost:5173/app/{full_path}">
@@ -359,10 +372,10 @@ else:
                     <p>If not redirected, <a href="http://localhost:5173/app/{full_path}">click here</a></p>
                 </body>
             </html>
-            """)
+            """
+            )
         return HTMLResponse(
-            content="App not available. Please build the frontend.",
-            status_code=503
+            content="App not available. Please build the frontend.", status_code=503
         )
 
 
@@ -372,7 +385,7 @@ async def serve_landing():
     landing_file = LANDING_PATH / "index.html"
 
     if landing_file.exists():
-        with open(landing_file, 'r', encoding='utf-8') as f:
+        with open(landing_file, "r", encoding="utf-8") as f:
             content = f.read()
         # Fix asset paths
         content = content.replace('href="assets/', 'href="/assets/')
@@ -380,7 +393,8 @@ async def serve_landing():
         return HTMLResponse(content=content)
     else:
         # Simple fallback landing page
-        return HTMLResponse(content="""
+        return HTMLResponse(
+            content="""
         <!DOCTYPE html>
         <html lang="en">
         <head>
@@ -437,7 +451,9 @@ async def serve_landing():
             </div>
         </body>
         </html>
-        """, status_code=200)
+        """,
+            status_code=200,
+        )
 
 
 # Startup event logger
@@ -460,5 +476,5 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=8000,
         reload=settings.DEBUG,
-        log_level=settings.LOG_LEVEL.lower()
+        log_level=settings.LOG_LEVEL.lower(),
     )

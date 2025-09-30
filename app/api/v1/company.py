@@ -11,7 +11,7 @@ from app.schemas.company import (
     CompanyDashboardResponse,
     CompanyUsageResponse,
     CompanyProfileUpdate,
-    CompanyProfileResponse
+    CompanyProfileResponse,
 )
 
 router = APIRouter(prefix="/company", tags=["Company"])
@@ -19,8 +19,7 @@ router = APIRouter(prefix="/company", tags=["Company"])
 
 @router.get("/dashboard", response_model=CompanyDashboardResponse)
 async def get_company_dashboard(
-        current_user: User = Depends(get_company_user),
-        db: Session = Depends(get_db)
+    current_user: User = Depends(get_company_user), db: Session = Depends(get_db)
 ):
     """Get company dashboard data"""
 
@@ -43,16 +42,16 @@ async def get_company_dashboard(
         ads_generated_this_month=ads_this_month,
         monthly_limit=current_user.company.monthly_ad_limit,
         average_evaluation_score=avg_score,
-        recent_ads=recent_ads
+        recent_ads=recent_ads,
     )
 
 
 @router.get("/usage", response_model=CompanyUsageResponse)
 async def get_company_usage(
-        start_date: Optional[datetime] = None,
-        end_date: Optional[datetime] = None,
-        current_user: User = Depends(get_company_user),
-        db: Session = Depends(get_db)
+    start_date: Optional[datetime] = None,
+    end_date: Optional[datetime] = None,
+    current_user: User = Depends(get_company_user),
+    db: Session = Depends(get_db),
 ):
     """Get company usage statistics"""
 
@@ -65,29 +64,26 @@ async def get_company_usage(
         start_date = datetime(end_date.year, end_date.month, 1)
 
     usage_data = ad_service.get_company_usage(
-        company_id=current_user.company_id,
-        start_date=start_date,
-        end_date=end_date
+        company_id=current_user.company_id, start_date=start_date, end_date=end_date
     )
 
     return CompanyUsageResponse(
         company_id=current_user.company_id,
         period_start=start_date,
         period_end=end_date,
-        total_generated=usage_data['total_generated'],
-        total_regenerated=usage_data['total_regenerated'],
-        total_evaluated=usage_data['total_evaluated'],
-        daily_breakdown=usage_data['daily_breakdown'],
-        platform_distribution=usage_data['platform_distribution'],
-        remaining_monthly_limit=current_user.company.monthly_ad_limit -
-                                current_user.company.ads_generated_this_month
+        total_generated=usage_data["total_generated"],
+        total_regenerated=usage_data["total_regenerated"],
+        total_evaluated=usage_data["total_evaluated"],
+        daily_breakdown=usage_data["daily_breakdown"],
+        platform_distribution=usage_data["platform_distribution"],
+        remaining_monthly_limit=current_user.company.monthly_ad_limit
+        - current_user.company.ads_generated_this_month,
     )
 
 
 @router.get("/profile", response_model=CompanyProfileResponse)
 async def get_company_profile(
-        current_user: User = Depends(get_company_user),
-        db: Session = Depends(get_db)
+    current_user: User = Depends(get_company_user), db: Session = Depends(get_db)
 ):
     """Get company profile"""
 
@@ -106,15 +102,15 @@ async def get_company_profile(
         size=company.size,
         description=company.description,
         is_verified=company.is_verified,
-        created_at=company.created_at
+        created_at=company.created_at,
     )
 
 
 @router.put("/profile", response_model=CompanyProfileResponse)
 async def update_company_profile(
-        update_data: CompanyProfileUpdate,
-        current_user: User = Depends(get_company_user),
-        db: Session = Depends(get_db)
+    update_data: CompanyProfileUpdate,
+    current_user: User = Depends(get_company_user),
+    db: Session = Depends(get_db),
 ):
     """Update company profile"""
 
@@ -143,14 +139,13 @@ async def update_company_profile(
         size=company.size,
         description=company.description,
         is_verified=company.is_verified,
-        created_at=company.created_at
+        created_at=company.created_at,
     )
 
 
 @router.get("/ads/statistics")
 async def get_ad_statistics(
-        current_user: User = Depends(get_company_user),
-        db: Session = Depends(get_db)
+    current_user: User = Depends(get_company_user), db: Session = Depends(get_db)
 ):
     """Get detailed ad statistics for the company"""
 
@@ -159,16 +154,16 @@ async def get_ad_statistics(
     stats = ad_service.get_company_ad_statistics(current_user.company_id)
 
     return {
-        "total_ads": stats['total'],
-        "by_status": stats['by_status'],
-        "by_event": stats['by_event'],
+        "total_ads": stats["total"],
+        "by_status": stats["by_status"],
+        "by_event": stats["by_event"],
         "regeneration_stats": {
-            "total_regenerations": stats['total_regenerations'],
-            "average_regenerations_per_ad": stats['avg_regenerations']
+            "total_regenerations": stats["total_regenerations"],
+            "average_regenerations_per_ad": stats["avg_regenerations"],
         },
         "evaluation_stats": {
-            "total_evaluated": stats['total_evaluated'],
-            "average_score": stats['avg_score'],
-            "score_distribution": stats['score_distribution']
-        }
+            "total_evaluated": stats["total_evaluated"],
+            "average_score": stats["avg_score"],
+            "score_distribution": stats["score_distribution"],
+        },
     }

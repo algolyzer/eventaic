@@ -27,7 +27,9 @@ class AdminService:
 
         # Company stats
         total_companies = self.db.query(Company).count()
-        active_companies = self.db.query(Company).filter(Company.is_active == True).count()
+        active_companies = (
+            self.db.query(Company).filter(Company.is_active == True).count()
+        )
 
         # User stats
         total_users = self.db.query(User).filter(User.is_deleted == False).count()
@@ -44,63 +46,65 @@ class AdminService:
         ads_this_month = self.db.query(Ad).filter(Ad.created_at >= month_start).count()
 
         # Regeneration stats
-        total_regenerations = self.db.query(Ad).filter(Ad.parent_ad_id.isnot(None)).count()
+        total_regenerations = (
+            self.db.query(Ad).filter(Ad.parent_ad_id.isnot(None)).count()
+        )
 
         # Average evaluation score
-        avg_score = self.db.query(func.avg(Ad.evaluation_score)).filter(
-            Ad.evaluation_score.isnot(None)
-        ).scalar() or 0
+        avg_score = (
+            self.db.query(func.avg(Ad.evaluation_score))
+            .filter(Ad.evaluation_score.isnot(None))
+            .scalar()
+            or 0
+        )
 
         # Recent activities (last 10 ads)
         recent_ads = self.db.query(Ad).order_by(Ad.created_at.desc()).limit(10).all()
         recent_activities = [
             {
-                'id': str(ad.id),
-                'type': 'ad_created',
-                'company': ad.company.name,
-                'event': ad.event_name,
-                'created_at': ad.created_at.isoformat()
+                "id": str(ad.id),
+                "type": "ad_created",
+                "company": ad.company.name,
+                "event": ad.event_name,
+                "created_at": ad.created_at.isoformat(),
             }
             for ad in recent_ads
         ]
 
         # Top companies by ads generated
-        top_companies = self.db.query(
-            Company.name,
-            Company.id,
-            func.count(Ad.id).label('ad_count')
-        ).join(Ad).group_by(Company.id, Company.name).order_by(
-            func.count(Ad.id).desc()
-        ).limit(5).all()
+        top_companies = (
+            self.db.query(Company.name, Company.id, func.count(Ad.id).label("ad_count"))
+            .join(Ad)
+            .group_by(Company.id, Company.name)
+            .order_by(func.count(Ad.id).desc())
+            .limit(5)
+            .all()
+        )
 
         top_companies_list = [
-            {
-                'id': str(company_id),
-                'name': name,
-                'ads_generated': ad_count
-            }
+            {"id": str(company_id), "name": name, "ads_generated": ad_count}
             for name, company_id, ad_count in top_companies
         ]
 
         return {
-            'total_companies': total_companies,
-            'active_companies': active_companies,
-            'total_users': total_users,
-            'total_ads_generated': total_ads,
-            'ads_generated_today': ads_today,
-            'ads_generated_this_month': ads_this_month,
-            'total_regenerations': total_regenerations,
-            'average_evaluation_score': round(avg_score, 2),
-            'recent_activities': recent_activities,
-            'top_companies': top_companies_list
+            "total_companies": total_companies,
+            "active_companies": active_companies,
+            "total_users": total_users,
+            "total_ads_generated": total_ads,
+            "ads_generated_today": ads_today,
+            "ads_generated_this_month": ads_this_month,
+            "total_regenerations": total_regenerations,
+            "average_evaluation_score": round(avg_score, 2),
+            "recent_activities": recent_activities,
+            "top_companies": top_companies_list,
         }
 
     def get_companies(
-            self,
-            page: int = 1,
-            per_page: int = 20,
-            search: Optional[str] = None,
-            is_active: Optional[bool] = None
+        self,
+        page: int = 1,
+        per_page: int = 20,
+        search: Optional[str] = None,
+        is_active: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Get paginated list of companies"""
 
@@ -109,8 +113,8 @@ class AdminService:
         if search:
             query = query.filter(
                 or_(
-                    Company.name.ilike(f'%{search}%'),
-                    Company.email.ilike(f'%{search}%')
+                    Company.name.ilike(f"%{search}%"),
+                    Company.email.ilike(f"%{search}%"),
                 )
             )
 
@@ -119,33 +123,40 @@ class AdminService:
 
         total = query.count()
 
-        companies = query.order_by(Company.created_at.desc()).offset(
-            (page - 1) * per_page
-        ).limit(per_page).all()
+        companies = (
+            query.order_by(Company.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
 
         companies_list = []
         for company in companies:
             ad_count = self.db.query(Ad).filter(Ad.company_id == company.id).count()
-            user_count = self.db.query(User).filter(User.company_id == company.id).count()
+            user_count = (
+                self.db.query(User).filter(User.company_id == company.id).count()
+            )
 
-            companies_list.append({
-                'id': str(company.id),
-                'name': company.name,
-                'email': company.email,
-                'is_active': company.is_active,
-                'is_verified': company.is_verified,
-                'total_ads': ad_count,
-                'total_users': user_count,
-                'ads_this_month': company.ads_generated_this_month,
-                'monthly_limit': company.monthly_ad_limit,
-                'created_at': company.created_at.isoformat()
-            })
+            companies_list.append(
+                {
+                    "id": str(company.id),
+                    "name": company.name,
+                    "email": company.email,
+                    "is_active": company.is_active,
+                    "is_verified": company.is_verified,
+                    "total_ads": ad_count,
+                    "total_users": user_count,
+                    "ads_this_month": company.ads_generated_this_month,
+                    "monthly_limit": company.monthly_ad_limit,
+                    "created_at": company.created_at.isoformat(),
+                }
+            )
 
         return {
-            'total': total,
-            'page': page,
-            'per_page': per_page,
-            'companies': companies_list
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "companies": companies_list,
         }
 
     def get_company_detail(self, company_id: UUID) -> Optional[Dict[str, Any]]:
@@ -159,69 +170,70 @@ class AdminService:
         users = self.db.query(User).filter(User.company_id == company_id).all()
         users_list = [
             {
-                'id': str(user.id),
-                'email': user.email,
-                'username': user.username,
-                'full_name': user.full_name,
-                'is_active': user.is_active,
-                'created_at': user.created_at.isoformat()
+                "id": str(user.id),
+                "email": user.email,
+                "username": user.username,
+                "full_name": user.full_name,
+                "is_active": user.is_active,
+                "created_at": user.created_at.isoformat(),
             }
             for user in users
         ]
 
         # Get recent ads
-        recent_ads = self.db.query(Ad).filter(
-            Ad.company_id == company_id
-        ).order_by(Ad.created_at.desc()).limit(10).all()
+        recent_ads = (
+            self.db.query(Ad)
+            .filter(Ad.company_id == company_id)
+            .order_by(Ad.created_at.desc())
+            .limit(10)
+            .all()
+        )
 
         recent_ads_list = [
             {
-                'id': str(ad.id),
-                'event_name': ad.event_name,
-                'headline': ad.headline,
-                'status': ad.status.value,
-                'created_at': ad.created_at.isoformat()
+                "id": str(ad.id),
+                "event_name": ad.event_name,
+                "headline": ad.headline,
+                "status": ad.status.value,
+                "created_at": ad.created_at.isoformat(),
             }
             for ad in recent_ads
         ]
 
         return {
-            'id': company.id,
-            'name': company.name,
-            'email': company.email,
-            'phone': company.phone,
-            'website': company.website,
-            'address': company.address,
-            'city': company.city,
-            'country': company.country,
-            'industry': company.industry,
-            'size': company.size,
-            'description': company.description,
-            'monthly_ad_limit': company.monthly_ad_limit,
-            'ads_generated_this_month': company.ads_generated_this_month,
-            'total_ads_generated': company.total_ads_generated,
-            'is_active': company.is_active,
-            'is_verified': company.is_verified,
-            'created_at': company.created_at,
-            'updated_at': company.updated_at,
-            'users': users_list,
-            'recent_ads': recent_ads_list
+            "id": company.id,
+            "name": company.name,
+            "email": company.email,
+            "phone": company.phone,
+            "website": company.website,
+            "address": company.address,
+            "city": company.city,
+            "country": company.country,
+            "industry": company.industry,
+            "size": company.size,
+            "description": company.description,
+            "monthly_ad_limit": company.monthly_ad_limit,
+            "ads_generated_this_month": company.ads_generated_this_month,
+            "total_ads_generated": company.total_ads_generated,
+            "is_active": company.is_active,
+            "is_verified": company.is_verified,
+            "created_at": company.created_at,
+            "updated_at": company.updated_at,
+            "users": users_list,
+            "recent_ads": recent_ads_list,
         }
 
     def get_statistics(
-            self,
-            start_date: datetime,
-            end_date: datetime,
-            company_id: Optional[UUID] = None
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        company_id: Optional[UUID] = None,
     ) -> Dict[str, Any]:
         """Get platform statistics for a date range"""
 
         # Base queries
         ad_query = self.db.query(Ad).filter(
-            and_(
-                Ad.created_at >= start_date,
-                Ad.created_at <= end_date
-            )
+            and_(Ad.created_at >= start_date, Ad.created_at <= end_date)
         )
 
         if company_id:
@@ -246,17 +258,18 @@ class AdminService:
             day_end = datetime.combine(current_date, datetime.max.time())
 
             day_query = ad_query.filter(
-                and_(
-                    Ad.created_at >= day_start,
-                    Ad.created_at <= day_end
-                )
+                and_(Ad.created_at >= day_start, Ad.created_at <= day_end)
             )
 
-            daily_stats.append({
-                'date': current_date.isoformat(),
-                'ads_created': day_query.count(),
-                'evaluations': day_query.filter(Ad.evaluation_score.isnot(None)).count()
-            })
+            daily_stats.append(
+                {
+                    "date": current_date.isoformat(),
+                    "ads_created": day_query.count(),
+                    "evaluations": day_query.filter(
+                        Ad.evaluation_score.isnot(None)
+                    ).count(),
+                }
+            )
 
             current_date += timedelta(days=1)
 
@@ -265,77 +278,80 @@ class AdminService:
         for ad in ad_query.all():
             if ad.platforms:
                 for platform in ad.platforms:
-                    platform_distribution[platform] = platform_distribution.get(platform, 0) + 1
+                    platform_distribution[platform] = (
+                        platform_distribution.get(platform, 0) + 1
+                    )
 
         # Event distribution (top 10)
         event_distribution = {}
-        event_counts = self.db.query(
-            Ad.event_name,
-            func.count(Ad.id).label('count')
-        ).filter(
-            and_(
-                Ad.created_at >= start_date,
-                Ad.created_at <= end_date
-            )
-        ).group_by(Ad.event_name).order_by(
-            func.count(Ad.id).desc()
-        ).limit(10).all()
+        event_counts = (
+            self.db.query(Ad.event_name, func.count(Ad.id).label("count"))
+            .filter(and_(Ad.created_at >= start_date, Ad.created_at <= end_date))
+            .group_by(Ad.event_name)
+            .order_by(func.count(Ad.id).desc())
+            .limit(10)
+            .all()
+        )
 
         for event, count in event_counts:
             event_distribution[event] = count
 
         # Top performing ads
-        top_ads = ad_query.filter(
-            Ad.evaluation_score.isnot(None)
-        ).order_by(Ad.evaluation_score.desc()).limit(10).all()
+        top_ads = (
+            ad_query.filter(Ad.evaluation_score.isnot(None))
+            .order_by(Ad.evaluation_score.desc())
+            .limit(10)
+            .all()
+        )
 
         top_performing_ads = [
             {
-                'id': str(ad.id),
-                'headline': ad.headline,
-                'event': ad.event_name,
-                'company': ad.company.name,
-                'score': ad.evaluation_score
+                "id": str(ad.id),
+                "headline": ad.headline,
+                "event": ad.event_name,
+                "company": ad.company.name,
+                "score": ad.evaluation_score,
             }
             for ad in top_ads
         ]
 
         # Company rankings
-        company_rankings = self.db.query(
-            Company.name,
-            func.count(Ad.id).label('ad_count'),
-            func.avg(Ad.evaluation_score).label('avg_score')
-        ).join(Ad).filter(
-            and_(
-                Ad.created_at >= start_date,
-                Ad.created_at <= end_date
+        company_rankings = (
+            self.db.query(
+                Company.name,
+                func.count(Ad.id).label("ad_count"),
+                func.avg(Ad.evaluation_score).label("avg_score"),
             )
-        ).group_by(Company.name).order_by(
-            func.count(Ad.id).desc()
-        ).limit(10).all()
+            .join(Ad)
+            .filter(and_(Ad.created_at >= start_date, Ad.created_at <= end_date))
+            .group_by(Company.name)
+            .order_by(func.count(Ad.id).desc())
+            .limit(10)
+            .all()
+        )
 
         company_rankings_list = [
             {
-                'name': name,
-                'ads_generated': ad_count,
-                'average_score': round(avg_score, 2) if avg_score else 0
+                "name": name,
+                "ads_generated": ad_count,
+                "average_score": round(avg_score, 2) if avg_score else 0,
             }
             for name, ad_count, avg_score in company_rankings
         ]
 
         return {
-            'period_start': start_date,
-            'period_end': end_date,
-            'total_ads': total_ads,
-            'total_regenerations': total_regenerations,
-            'total_evaluations': total_evaluations,
-            'unique_companies': unique_companies,
-            'active_users': active_users,
-            'daily_stats': daily_stats,
-            'platform_distribution': platform_distribution,
-            'event_distribution': event_distribution,
-            'top_performing_ads': top_performing_ads,
-            'company_rankings': company_rankings_list
+            "period_start": start_date,
+            "period_end": end_date,
+            "total_ads": total_ads,
+            "total_regenerations": total_regenerations,
+            "total_evaluations": total_evaluations,
+            "unique_companies": unique_companies,
+            "active_users": active_users,
+            "daily_stats": daily_stats,
+            "platform_distribution": platform_distribution,
+            "event_distribution": event_distribution,
+            "top_performing_ads": top_performing_ads,
+            "company_rankings": company_rankings_list,
         }
 
     def update_company_status(self, company_id: UUID, is_active: bool) -> bool:
@@ -365,10 +381,7 @@ class AdminService:
         return True
 
     def get_all_users(
-            self,
-            page: int = 1,
-            per_page: int = 20,
-            search: Optional[str] = None
+        self, page: int = 1, per_page: int = 20, search: Optional[str] = None
     ) -> Dict[str, Any]:
         """Get all users with pagination"""
 
@@ -377,37 +390,35 @@ class AdminService:
         if search:
             query = query.filter(
                 or_(
-                    User.email.ilike(f'%{search}%'),
-                    User.username.ilike(f'%{search}%'),
-                    User.full_name.ilike(f'%{search}%')
+                    User.email.ilike(f"%{search}%"),
+                    User.username.ilike(f"%{search}%"),
+                    User.full_name.ilike(f"%{search}%"),
                 )
             )
 
         total = query.count()
 
-        users = query.order_by(User.created_at.desc()).offset(
-            (page - 1) * per_page
-        ).limit(per_page).all()
+        users = (
+            query.order_by(User.created_at.desc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+            .all()
+        )
 
         users_list = [
             {
-                'id': str(user.id),
-                'email': user.email,
-                'username': user.username,
-                'full_name': user.full_name,
-                'role': user.role.value,
-                'company': user.company.name if user.company else None,
-                'is_active': user.is_active,
-                'is_email_verified': user.is_email_verified,
-                'created_at': user.created_at.isoformat(),
-                'last_login': user.last_login.isoformat() if user.last_login else None
+                "id": str(user.id),
+                "email": user.email,
+                "username": user.username,
+                "full_name": user.full_name,
+                "role": user.role.value,
+                "company": user.company.name if user.company else None,
+                "is_active": user.is_active,
+                "is_email_verified": user.is_email_verified,
+                "created_at": user.created_at.isoformat(),
+                "last_login": user.last_login.isoformat() if user.last_login else None,
             }
             for user in users
         ]
 
-        return {
-            'total': total,
-            'page': page,
-            'per_page': per_page,
-            'users': users_list
-        }
+        return {"total": total, "page": page, "per_page": per_page, "users": users_list}

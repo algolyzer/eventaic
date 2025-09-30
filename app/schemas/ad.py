@@ -8,18 +8,24 @@ from app.models.enums import AdStatus, AdType, Platform
 class AdGenerationRequest(BaseModel):
     """Request model for ad generation"""
 
-    event_name: str = Field(..., min_length=1, max_length=255, description="Name of the event triggering the ad")
-    product_name: Optional[str] = Field(None, max_length=255, description="Specific product name")
-    product_categories: List[str] = Field(
+    event_name: str = Field(
         ...,
-        min_items=1,
-        max_items=10,
-        description="Product categories (1-10 items)"
+        min_length=1,
+        max_length=255,
+        description="Name of the event triggering the ad",
+    )
+    product_name: Optional[str] = Field(
+        None, max_length=255, description="Specific product name"
+    )
+    product_categories: List[str] = Field(
+        ..., min_items=1, max_items=10, description="Product categories (1-10 items)"
     )
     location: Optional[str] = Field(None, max_length=255, description="Target location")
-    company_name: Optional[str] = Field(None, max_length=255, description="Company name override")
+    company_name: Optional[str] = Field(
+        None, max_length=255, description="Company name override"
+    )
 
-    @field_validator('product_categories')
+    @field_validator("product_categories")
     @classmethod
     def validate_categories(cls, v: List[str]) -> List[str]:
         """Validate and deduplicate product categories"""
@@ -34,12 +40,10 @@ class AdRegenerationRequest(BaseModel):
     ad_id: UUID = Field(..., description="ID of the ad to regenerate")
     regenerate_image: bool = Field(
         default=False,
-        description="If True, only regenerate image; if False, regenerate entire ad"
+        description="If True, only regenerate image; if False, regenerate entire ad",
     )
     additional_instructions: Optional[str] = Field(
-        None,
-        max_length=1000,
-        description="Additional instructions for regeneration"
+        None, max_length=1000, description="Additional instructions for regeneration"
     )
 
 
@@ -57,8 +61,12 @@ class AdContent(BaseModel):
     slogan: str = Field(..., description="Ad slogan")
     cta_text: str = Field(..., description="Call-to-action text")
     keywords: List[str] = Field(default_factory=list, description="SEO keywords")
-    hashtags: List[str] = Field(default_factory=list, description="Social media hashtags")
-    image_prompt: str = Field(default="", description="Prompt used for image generation")
+    hashtags: List[str] = Field(
+        default_factory=list, description="Social media hashtags"
+    )
+    image_prompt: str = Field(
+        default="", description="Prompt used for image generation"
+    )
     image_base64: Optional[str] = Field(None, description="Base64 encoded image data")
     image_url: Optional[str] = Field(None, description="URL to hosted image")
 
@@ -68,10 +76,16 @@ class PlatformRecommendation(BaseModel):
 
     platform: Platform = Field(..., description="Platform name")
     priority: int = Field(..., ge=1, le=5, description="Priority ranking (1=highest)")
-    recommended_budget_percentage: float = Field(..., ge=0, le=100, description="Recommended budget allocation")
-    best_posting_times: List[str] = Field(default_factory=list, description="Optimal posting times")
+    recommended_budget_percentage: float = Field(
+        ..., ge=0, le=100, description="Recommended budget allocation"
+    )
+    best_posting_times: List[str] = Field(
+        default_factory=list, description="Optimal posting times"
+    )
     estimated_reach: Optional[int] = Field(None, description="Estimated audience reach")
-    estimated_ctr: Optional[float] = Field(None, description="Estimated click-through rate")
+    estimated_ctr: Optional[float] = Field(
+        None, description="Estimated click-through rate"
+    )
     notes: Optional[str] = Field(None, description="Additional platform notes")
 
 
@@ -129,7 +143,9 @@ class EvaluationScore(BaseModel):
     """Individual evaluation score"""
 
     score: float = Field(..., ge=0, le=10, description="Score value (0-10)")
-    feedback: Optional[str] = Field(None, description="Specific feedback for this metric")
+    feedback: Optional[str] = Field(
+        None, description="Specific feedback for this metric"
+    )
 
 
 class EvaluationResponse(BaseModel):
@@ -159,8 +175,7 @@ class ImageGenerationRequest(BaseModel):
 
     ad_id: UUID = Field(..., description="ID of the ad")
     force_regenerate: bool = Field(
-        default=False,
-        description="Force regeneration even if image exists"
+        default=False, description="Force regeneration even if image exists"
     )
 
 

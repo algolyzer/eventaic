@@ -15,7 +15,7 @@ from app.schemas.ad import (
     AdListResponse,
     EvaluationResponse,
     ImageGenerationRequest,
-    ImageGenerationResponse
+    ImageGenerationResponse,
 )
 from app.services.ad_service import AdService
 import logging
@@ -25,11 +25,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ads", tags=["Ads"])
 
 
-@router.post("/generate", response_model=AdResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/generate", response_model=AdResponse, status_code=status.HTTP_201_CREATED
+)
 async def generate_ad(
-        request: AdGenerationRequest,
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    request: AdGenerationRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     Generate new ad with content and image
@@ -49,15 +51,12 @@ async def generate_ad(
     if not ad_service.check_generation_limit(current_user.company_id):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Monthly ad generation limit reached. Please upgrade your plan."
+            detail="Monthly ad generation limit reached. Please upgrade your plan.",
         )
 
     try:
         # Generate ad with image
-        ad = await ad_service.generate_ad(
-            user=current_user,
-            request=request
-        )
+        ad = await ad_service.generate_ad(user=current_user, request=request)
 
         logger.info(f"Ad {ad.id} generated successfully for user {current_user.id}")
         return ad
@@ -66,15 +65,15 @@ async def generate_ad(
         logger.error(f"Ad generation failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate ad: {str(e)}"
+            detail=f"Failed to generate ad: {str(e)}",
         )
 
 
 @router.post("/regenerate", response_model=AdResponse)
 async def regenerate_ad(
-        request: AdRegenerationRequest,
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    request: AdRegenerationRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     Regenerate existing ad
@@ -91,15 +90,14 @@ async def regenerate_ad(
     original_ad = ad_service.get_ad(request.ad_id)
     if not original_ad:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found"
         )
 
     # Check ownership
     if original_ad.company_id != current_user.company_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to regenerate this ad"
+            detail="You don't have permission to regenerate this ad",
         )
 
     try:
@@ -108,7 +106,7 @@ async def regenerate_ad(
             user=current_user,
             original_ad=original_ad,
             regenerate_image=request.regenerate_image,
-            additional_instructions=request.additional_instructions
+            additional_instructions=request.additional_instructions,
         )
 
         logger.info(
@@ -122,15 +120,15 @@ async def regenerate_ad(
         logger.error(f"Ad regeneration failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to regenerate ad: {str(e)}"
+            detail=f"Failed to regenerate ad: {str(e)}",
         )
 
 
 @router.post("/generate-image", response_model=ImageGenerationResponse)
 async def generate_image(
-        request: ImageGenerationRequest,
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    request: ImageGenerationRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     Generate or regenerate image for an existing ad
@@ -145,15 +143,14 @@ async def generate_image(
     ad = ad_service.get_ad(request.ad_id)
     if not ad:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found"
         )
 
     # Check ownership
     if ad.company_id != current_user.company_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to modify this ad"
+            detail="You don't have permission to modify this ad",
         )
 
     # Check if image exists and force_regenerate is False
@@ -162,37 +159,35 @@ async def generate_image(
             ad_id=ad.id,
             image_url=ad.image_url,
             image_prompt=ad.image_prompt or "",
-            generated_at=ad.updated_at
+            generated_at=ad.updated_at,
         )
 
     try:
         # Regenerate image only
         updated_ad = await ad_service.regenerate_ad(
-            user=current_user,
-            original_ad=ad,
-            regenerate_image=True
+            user=current_user, original_ad=ad, regenerate_image=True
         )
 
         return ImageGenerationResponse(
             ad_id=updated_ad.id,
             image_url=updated_ad.image_url or "",
             image_prompt=updated_ad.image_prompt or "",
-            generated_at=datetime.utcnow()
+            generated_at=datetime.utcnow(),
         )
 
     except Exception as e:
         logger.error(f"Image generation failed for ad {request.ad_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to generate image: {str(e)}"
+            detail=f"Failed to generate image: {str(e)}",
         )
 
 
 @router.post("/evaluate", response_model=EvaluationResponse)
 async def evaluate_ad(
-        request: AdEvaluationRequest,
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    request: AdEvaluationRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     Evaluate ad quality using AI
@@ -213,15 +208,14 @@ async def evaluate_ad(
     ad = ad_service.get_ad(request.ad_id)
     if not ad:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found"
         )
 
     # Check ownership
     if ad.company_id != current_user.company_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to evaluate this ad"
+            detail="You don't have permission to evaluate this ad",
         )
 
     try:
@@ -234,17 +228,17 @@ async def evaluate_ad(
         logger.error(f"Ad evaluation failed: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to evaluate ad: {str(e)}"
+            detail=f"Failed to evaluate ad: {str(e)}",
         )
 
 
 @router.get("/", response_model=AdListResponse)
 async def list_ads(
-        page: int = Query(1, ge=1, description="Page number"),
-        per_page: int = Query(20, ge=1, le=100, description="Items per page"),
-        status: Optional[AdStatus] = Query(None, description="Filter by status"),
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    page: int = Query(1, ge=1, description="Page number"),
+    per_page: int = Query(20, ge=1, le=100, description="Items per page"),
+    status: Optional[AdStatus] = Query(None, description="Filter by status"),
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     List company ads with pagination
@@ -259,7 +253,7 @@ async def list_ads(
             company_id=current_user.company_id,
             page=page,
             per_page=per_page,
-            status=status
+            status=status,
         )
 
         return result
@@ -268,15 +262,15 @@ async def list_ads(
         logger.error(f"Failed to list ads: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list ads: {str(e)}"
+            detail=f"Failed to list ads: {str(e)}",
         )
 
 
 @router.get("/{ad_id}", response_model=AdResponse)
 async def get_ad(
-        ad_id: UUID,
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    ad_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     Get specific ad by ID
@@ -294,15 +288,14 @@ async def get_ad(
     ad = ad_service.get_ad(ad_id)
     if not ad:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found"
         )
 
     # Check ownership
     if ad.company_id != current_user.company_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to view this ad"
+            detail="You don't have permission to view this ad",
         )
 
     try:
@@ -311,15 +304,15 @@ async def get_ad(
         logger.error(f"Failed to format ad response: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve ad: {str(e)}"
+            detail=f"Failed to retrieve ad: {str(e)}",
         )
 
 
 @router.delete("/{ad_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_ad(
-        ad_id: UUID,
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    ad_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     Delete ad
@@ -334,15 +327,14 @@ async def delete_ad(
     ad = ad_service.get_ad(ad_id)
     if not ad:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found"
         )
 
     # Check ownership
     if ad.company_id != current_user.company_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to delete this ad"
+            detail="You don't have permission to delete this ad",
         )
 
     try:
@@ -354,15 +346,15 @@ async def delete_ad(
         logger.error(f"Failed to delete ad {ad_id}: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to delete ad: {str(e)}"
+            detail=f"Failed to delete ad: {str(e)}",
         )
 
 
 @router.get("/{ad_id}/history", response_model=List[AdResponse])
 async def get_ad_history(
-        ad_id: UUID,
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    ad_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """
     Get ad regeneration history
@@ -376,15 +368,14 @@ async def get_ad_history(
     original_ad = ad_service.get_ad(ad_id)
     if not original_ad:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Ad not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Ad not found"
         )
 
     # Check ownership
     if original_ad.company_id != current_user.company_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You don't have permission to view this ad"
+            detail="You don't have permission to view this ad",
         )
 
     try:
@@ -400,9 +391,12 @@ async def get_ad_history(
 
         # Get all versions
         if root_ad:
-            versions = db.query(Ad).filter(
-                (Ad.id == root_ad.id) | (Ad.parent_ad_id == root_ad.id)
-            ).order_by(Ad.created_at).all()
+            versions = (
+                db.query(Ad)
+                .filter((Ad.id == root_ad.id) | (Ad.parent_ad_id == root_ad.id))
+                .order_by(Ad.created_at)
+                .all()
+            )
         else:
             versions = [original_ad]
 
@@ -412,5 +406,5 @@ async def get_ad_history(
         logger.error(f"Failed to get ad history: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to retrieve ad history: {str(e)}"
+            detail=f"Failed to retrieve ad history: {str(e)}",
         )

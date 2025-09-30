@@ -11,14 +11,16 @@ class RegisterRequest(BaseModel):
     company_name: str = Field(..., max_length=255)
     phone: Optional[str] = Field(None, max_length=20)
 
-    @field_validator('username')
+    @field_validator("username")
     @classmethod
     def validate_username(cls, v: str) -> str:
         if not re.match(r"^[a-zA-Z0-9_-]+$", v):
-            raise ValueError("Username can only contain letters, numbers, underscores and hyphens")
+            raise ValueError(
+                "Username can only contain letters, numbers, underscores and hyphens"
+            )
         return v
 
-    @field_validator('password')
+    @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
         if len(v) < 8:
@@ -33,11 +35,13 @@ class RegisterRequest(BaseModel):
             raise ValueError("Password must contain at least one special character")
         return v
 
-    @field_validator('phone')
+    @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: Optional[str]) -> Optional[str]:
         if v and not re.match(
-                r"^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$", v):
+            r"^[\+]?[(]?[0-9]{1,3}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,4}[-\s\.]?[0-9]{1,9}$",
+            v,
+        ):
             raise ValueError("Invalid phone number format")
         return v
 
@@ -66,7 +70,7 @@ class PasswordResetConfirm(BaseModel):
     token: str
     new_password: str = Field(..., min_length=8)
 
-    @field_validator('new_password')
+    @field_validator("new_password")
     @classmethod
     def validate_password(cls, v: str) -> str:
         if not re.search(r"[A-Z]", v):
@@ -88,10 +92,10 @@ class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=8)
 
-    @field_validator('new_password')
+    @field_validator("new_password")
     @classmethod
     def validate_password(cls, v: str, info):
-        current = (info.data or {}).get('current_password')
+        current = (info.data or {}).get("current_password")
         if current and v == current:
             raise ValueError("New password must be different from current password")
         if not re.search(r"[A-Z]", v):

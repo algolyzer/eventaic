@@ -86,7 +86,9 @@ class EmailTemplates:
         """
 
     @staticmethod
-    def get_verification_template(username: str, verification_link: str, app_name: str = "Eventaic") -> str:
+    def get_verification_template(
+        username: str, verification_link: str, app_name: str = "Eventaic"
+    ) -> str:
         """Email verification template"""
         content = f"""
         <h2>Welcome to {app_name}, {username}!</h2>
@@ -102,7 +104,9 @@ class EmailTemplates:
         return EmailTemplates.get_base_template(content, app_name)
 
     @staticmethod
-    def get_password_reset_template(username: str, reset_link: str, app_name: str = "Eventaic") -> str:
+    def get_password_reset_template(
+        username: str, reset_link: str, app_name: str = "Eventaic"
+    ) -> str:
         """Password reset template"""
         content = f"""
         <h2>Password Reset Request</h2>
@@ -125,7 +129,9 @@ class EmailTemplates:
         return EmailTemplates.get_base_template(content, app_name)
 
     @staticmethod
-    def get_welcome_template(username: str, company_name: Optional[str] = None, app_name: str = "Eventaic") -> str:
+    def get_welcome_template(
+        username: str, company_name: Optional[str] = None, app_name: str = "Eventaic"
+    ) -> str:
         """Welcome email template"""
         company_text = f" and {company_name}" if company_name else ""
         content = f"""
@@ -150,10 +156,7 @@ class EmailTemplates:
 
     @staticmethod
     def get_ad_generation_notification(
-            username: str,
-            event_name: str,
-            ad_id: str,
-            app_name: str = "Eventaic"
+        username: str, event_name: str, ad_id: str, app_name: str = "Eventaic"
     ) -> str:
         """Ad generation success notification"""
         content = f"""

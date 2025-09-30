@@ -25,11 +25,11 @@ class EmailService:
         self.executor = ThreadPoolExecutor(max_workers=5)
 
     async def send_email(
-            self,
-            to_email: str,
-            subject: str,
-            html_content: str,
-            text_content: Optional[str] = None
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        text_content: Optional[str] = None,
     ) -> bool:
         """Send email asynchronously"""
 
@@ -44,30 +44,30 @@ class EmailService:
             to_email,
             subject,
             html_content,
-            text_content
+            text_content,
         )
 
     def _send_email_sync(
-            self,
-            to_email: str,
-            subject: str,
-            html_content: str,
-            text_content: Optional[str] = None
+        self,
+        to_email: str,
+        subject: str,
+        html_content: str,
+        text_content: Optional[str] = None,
     ) -> bool:
         """Send email synchronously"""
 
         try:
-            msg = MIMEMultipart('alternative')
-            msg['Subject'] = subject
-            msg['From'] = f"{self.from_name} <{self.from_email}>"
-            msg['To'] = to_email
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = f"{self.from_name} <{self.from_email}>"
+            msg["To"] = to_email
 
             # Add text and HTML parts
             if text_content:
-                text_part = MIMEText(text_content, 'plain')
+                text_part = MIMEText(text_content, "plain")
                 msg.attach(text_part)
 
-            html_part = MIMEText(html_content, 'html')
+            html_part = MIMEText(html_content, "html")
             msg.attach(html_part)
 
             # Send email
@@ -84,10 +84,7 @@ class EmailService:
             return False
 
     async def send_verification_email(
-            self,
-            to_email: str,
-            username: str,
-            verification_link: str
+        self, to_email: str, username: str, verification_link: str
     ) -> bool:
         """Send email verification"""
 
@@ -95,41 +92,31 @@ class EmailService:
         html_content = EmailTemplates.get_verification_template(
             username=username,
             verification_link=verification_link,
-            app_name=settings.APP_NAME
+            app_name=settings.APP_NAME,
         )
 
         return await self.send_email(to_email, subject, html_content)
 
     async def send_password_reset_email(
-            self,
-            to_email: str,
-            username: str,
-            reset_link: str
+        self, to_email: str, username: str, reset_link: str
     ) -> bool:
         """Send password reset email"""
 
         subject = f"Reset your password - {settings.APP_NAME}"
         html_content = EmailTemplates.get_password_reset_template(
-            username=username,
-            reset_link=reset_link,
-            app_name=settings.APP_NAME
+            username=username, reset_link=reset_link, app_name=settings.APP_NAME
         )
 
         return await self.send_email(to_email, subject, html_content)
 
     async def send_welcome_email(
-            self,
-            to_email: str,
-            username: str,
-            company_name: Optional[str] = None
+        self, to_email: str, username: str, company_name: Optional[str] = None
     ) -> bool:
         """Send welcome email"""
 
         subject = f"Welcome to {settings.APP_NAME}!"
         html_content = EmailTemplates.get_welcome_template(
-            username=username,
-            company_name=company_name,
-            app_name=settings.APP_NAME
+            username=username, company_name=company_name, app_name=settings.APP_NAME
         )
 
         return await self.send_email(to_email, subject, html_content)

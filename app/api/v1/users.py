@@ -3,20 +3,14 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
 from app.models.user import User
-from app.schemas.user import (
-    UserProfileResponse,
-    UserProfileUpdate,
-    UserListResponse
-)
+from app.schemas.user import UserProfileResponse, UserProfileUpdate, UserListResponse
 from app.services.user_service import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.get("/profile", response_model=UserProfileResponse)
-async def get_profile(
-        current_user: User = Depends(get_current_active_user)
-):
+async def get_profile(current_user: User = Depends(get_current_active_user)):
     """Get current user profile"""
 
     return UserProfileResponse(
@@ -30,15 +24,15 @@ async def get_profile(
         company_id=current_user.company_id,
         company_name=current_user.company.name if current_user.company else None,
         created_at=current_user.created_at,
-        last_login=current_user.last_login
+        last_login=current_user.last_login,
     )
 
 
 @router.put("/profile", response_model=UserProfileResponse)
 async def update_profile(
-        update_data: UserProfileUpdate,
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    update_data: UserProfileUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
 ):
     """Update user profile"""
 
@@ -48,16 +42,14 @@ async def update_profile(
     if update_data.email and update_data.email != current_user.email:
         if user_service.get_by_email(update_data.email):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already in use"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use"
             )
 
     # Check if username is being changed
     if update_data.username and update_data.username != current_user.username:
         if user_service.get_by_username(update_data.username):
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already taken"
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
             )
 
     # Update user
@@ -75,14 +67,13 @@ async def update_profile(
         company_id=updated_user.company_id,
         company_name=updated_user.company.name if updated_user.company else None,
         created_at=updated_user.created_at,
-        last_login=updated_user.last_login
+        last_login=updated_user.last_login,
     )
 
 
 @router.delete("/profile")
 async def delete_account(
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
 ):
     """Soft delete user account"""
 
@@ -96,8 +87,7 @@ async def delete_account(
 
 @router.get("/activity")
 async def get_user_activity(
-        current_user: User = Depends(get_current_active_user),
-        db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)
 ):
     """Get user activity log"""
 
@@ -107,9 +97,9 @@ async def get_user_activity(
 
     return {
         "user_id": current_user.id,
-        "total_ads_created": activity['total_ads'],
-        "last_ad_created": activity['last_ad_date'],
-        "total_evaluations": activity['total_evaluations'],
+        "total_ads_created": activity["total_ads"],
+        "last_ad_created": activity["last_ad_date"],
+        "total_evaluations": activity["total_evaluations"],
         "account_created": current_user.created_at,
-        "last_login": current_user.last_login
+        "last_login": current_user.last_login,
     }

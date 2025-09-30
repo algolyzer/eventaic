@@ -14,17 +14,19 @@ def setup_logging(level: str = "INFO") -> None:
 
     logging.basicConfig(
         level=getattr(logging, level.upper()),
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
             logging.StreamHandler(sys.stdout),
-            logging.FileHandler(f'logs/eventaic_{datetime.now().strftime("%Y%m%d")}.log')
-        ]
+            logging.FileHandler(
+                f'logs/eventaic_{datetime.now().strftime("%Y%m%d")}.log'
+            ),
+        ],
     )
 
 
 def generate_random_string(length: int = 32) -> str:
     """Generate random alphanumeric string"""
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+    return "".join(random.choices(string.ascii_letters + string.digits, k=length))
 
 
 def hash_string(text: str) -> str:
@@ -37,7 +39,9 @@ def format_datetime(dt: datetime, format_str: str = "%Y-%m-%d %H:%M:%S") -> str:
     return dt.strftime(format_str) if dt else ""
 
 
-def parse_datetime(date_str: str, format_str: str = "%Y-%m-%d %H:%M:%S") -> Optional[datetime]:
+def parse_datetime(
+    date_str: str, format_str: str = "%Y-%m-%d %H:%M:%S"
+) -> Optional[datetime]:
     """Parse string to datetime"""
     try:
         return datetime.strptime(date_str, format_str)
@@ -56,20 +60,20 @@ def truncate_string(text: str, max_length: int, suffix: str = "...") -> str:
     """Truncate string to maximum length"""
     if len(text) <= max_length:
         return text
-    return text[:max_length - len(suffix)] + suffix
+    return text[: max_length - len(suffix)] + suffix
 
 
 def sanitize_filename(filename: str) -> str:
     """Sanitize filename for safe storage"""
     invalid_chars = '<>:"/\\|?*'
     for char in invalid_chars:
-        filename = filename.replace(char, '_')
+        filename = filename.replace(char, "_")
     return filename
 
 
 def get_file_extension(filename: str) -> str:
     """Get file extension from filename"""
-    parts = filename.split('.')
+    parts = filename.split(".")
     return parts[-1].lower() if len(parts) > 1 else ""
 
 
@@ -103,7 +107,9 @@ def retry_on_exception(max_retries: int = 3, delay: float = 1.0):
                     if retries == max_retries:
                         raise e
                     time.sleep(delay * retries)
-                    logging.warning(f"Retry {retries}/{max_retries} for {func.__name__}")
+                    logging.warning(
+                        f"Retry {retries}/{max_retries} for {func.__name__}"
+                    )
             return None
 
         return wrapper
@@ -111,27 +117,23 @@ def retry_on_exception(max_retries: int = 3, delay: float = 1.0):
     return decorator
 
 
-def paginate_results(
-        total: int,
-        page: int,
-        per_page: int
-) -> Dict[str, Any]:
+def paginate_results(total: int, page: int, per_page: int) -> Dict[str, Any]:
     """Calculate pagination metadata"""
     total_pages = (total + per_page - 1) // per_page
 
     return {
-        'total': total,
-        'page': page,
-        'per_page': per_page,
-        'pages': total_pages,
-        'has_next': page < total_pages,
-        'has_prev': page > 1
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": total_pages,
+        "has_next": page < total_pages,
+        "has_prev": page > 1,
     }
 
 
 def format_file_size(size_bytes: int) -> str:
     """Format file size in human readable format"""
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size_bytes < 1024.0:
             return f"{size_bytes:.2f} {unit}"
         size_bytes /= 1024.0
@@ -159,8 +161,12 @@ def get_date_range(period: str) -> tuple[datetime, datetime]:
     elif period == "last_month":
         first_day_this_month = now.replace(day=1)
         last_day_last_month = first_day_this_month - timedelta(days=1)
-        start = last_day_last_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = last_day_last_month.replace(hour=23, minute=59, second=59, microsecond=999999)
+        start = last_day_last_month.replace(
+            day=1, hour=0, minute=0, second=0, microsecond=0
+        )
+        end = last_day_last_month.replace(
+            hour=23, minute=59, second=59, microsecond=999999
+        )
     else:
         # Default to last 30 days
         start = now - timedelta(days=30)
@@ -174,13 +180,18 @@ def mask_sensitive_data(data: str, visible_chars: int = 4) -> str:
     if len(data) <= visible_chars * 2:
         return "*" * len(data)
 
-    return data[:visible_chars] + "*" * (len(data) - visible_chars * 2) + data[-visible_chars:]
+    return (
+        data[:visible_chars]
+        + "*" * (len(data) - visible_chars * 2)
+        + data[-visible_chars:]
+    )
 
 
 def is_valid_uuid(uuid_string: str) -> bool:
     """Check if string is valid UUID"""
     try:
         from uuid import UUID
+
         UUID(uuid_string)
         return True
     except (ValueError, AttributeError):

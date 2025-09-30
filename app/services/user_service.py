@@ -66,20 +66,24 @@ class UserService:
         total_ads = self.db.query(Ad).filter(Ad.created_by_id == user_id).count()
 
         # Get last ad creation date
-        last_ad = self.db.query(Ad).filter(
-            Ad.created_by_id == user_id
-        ).order_by(Ad.created_at.desc()).first()
+        last_ad = (
+            self.db.query(Ad)
+            .filter(Ad.created_by_id == user_id)
+            .order_by(Ad.created_at.desc())
+            .first()
+        )
 
         last_ad_date = last_ad.created_at if last_ad else None
 
         # Get total evaluations
-        total_evaluations = self.db.query(Ad).filter(
-            Ad.created_by_id == user_id,
-            Ad.evaluation_score.isnot(None)
-        ).count()
+        total_evaluations = (
+            self.db.query(Ad)
+            .filter(Ad.created_by_id == user_id, Ad.evaluation_score.isnot(None))
+            .count()
+        )
 
         return {
-            'total_ads': total_ads,
-            'last_ad_date': last_ad_date,
-            'total_evaluations': total_evaluations
+            "total_ads": total_ads,
+            "last_ad_date": last_ad_date,
+            "total_evaluations": total_evaluations,
         }

@@ -4,10 +4,14 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
 
 export const api = axios.create({
     baseURL: BASE_URL,
+    timeout: 10000, // 10 second timeout
     headers: {
         'Content-Type': 'application/json'
     }
 })
+
+// Track retry attempts to prevent infinite loops
+const retryTracker = new Map()
 
 // Request interceptor
 api.interceptors.request.use(
@@ -16,28 +20,61 @@ api.interceptors.request.use(
         if (token) {
             config.headers['Authorization'] = `Bearer ${token}`
         }
+
+        // Add request ID for tracking
+        config.requestId = `${config.url}_${Date.now()}`
+
         return config
     },
-    (error) => Promise.reject(error)
+    (error) => {
+        console.error('Request error:', error)
+        return Promise.reject(error)
+    }
 )
 
-// Response interceptor
+// Response interceptor with retry limit
 api.interceptors.response.use(
-    (response) => response,
+    (response) => {
+        // Clear retry count on success
+        if (response.config.requestId) {
+            retryTracker.delete(response.config.requestId)
+        }
+        return response
+    },
     async (error) => {
         const originalRequest = error.config
+
+        // If no config, just reject
+        if (!originalRequest) {
+            return Promise.reject(error)
+        }
+
+        // Track retry attempts
+        const requestId = originalRequest.requestId || 'unknown'
+        const retryCount = retryTracker.get(requestId) || 0
+
+        // Max 2 retry attempts
+        if (retryCount >= 2) {
+            retryTracker.delete(requestId)
+            console.error('Max retries reached for:', originalRequest.url)
+            return Promise.reject(error)
+        }
 
         // Handle 401 errors (unauthorized)
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true
+            retryTracker.set(requestId, retryCount + 1)
 
-            // Try to refresh token
+            // Try to refresh token only once
             const refreshToken = localStorage.getItem('eventaic:refresh_token')
-            if (refreshToken) {
+            if (refreshToken && retryCount === 0) {
                 try {
-                    const response = await api.post('/api/v1/auth/refresh', {
-                        refresh_token: refreshToken
-                    })
+                    const response = await axios.post(
+                        `${BASE_URL}/api/v1/auth/refresh`,
+                        {refresh_token: refreshToken},
+                        {timeout: 5000}
+                    )
+
                     const {access_token, user} = response.data
                     setAuth(access_token, user)
 
@@ -45,18 +82,34 @@ api.interceptors.response.use(
                     originalRequest.headers['Authorization'] = `Bearer ${access_token}`
                     return api(originalRequest)
                 } catch (refreshError) {
-                    // Refresh failed, redirect to login
+                    console.error('Token refresh failed:', refreshError)
                     clearAuth()
-                    window.location.href = '/app/auth/login?message=Session expired. Please login again.'
+
+                    // Only redirect if not already on login page
+                    if (!window.location.pathname.includes('/auth/login')) {
+                        window.location.href = '/app/auth/login?message=Session expired'
+                    }
                     return Promise.reject(refreshError)
                 }
             } else {
-                // No refresh token, redirect to login
+                // No refresh token or already retried
                 clearAuth()
-                window.location.href = '/app/auth/login'
+
+                // Only redirect if not already on login page
+                if (!window.location.pathname.includes('/auth/login')) {
+                    window.location.href = '/app/auth/login'
+                }
+                return Promise.reject(error)
             }
         }
 
+        // Handle network errors
+        if (!error.response) {
+            console.error('Network error:', error.message)
+            return Promise.reject(new Error('Network error. Please check your connection.'))
+        }
+
+        // Handle other errors
         const message = error.response?.data?.detail || error.message || 'Request failed'
         return Promise.reject(new Error(message))
     }
@@ -80,6 +133,8 @@ export function clearAuth() {
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
+    // Clear retry tracker
+    retryTracker.clear()
 }
 
 export function getToken() {
@@ -95,19 +150,20 @@ export function getUser() {
     }
 }
 
-// Auth API methods
+// Auth API methods with timeout
 export async function login(credentials) {
     try {
-        // Backend expects 'username' field which can be email or username
         const payload = {
             username: credentials.email || credentials.username,
             password: credentials.password
         }
 
-        const response = await api.post('/api/v1/auth/login', payload)
+        const response = await api.post('/api/v1/auth/login', payload, {
+            timeout: 10000 // 10 second timeout
+        })
+
         const {access_token, refresh_token, user} = response.data
 
-        // Store tokens and user data
         setAuth(access_token, user)
         if (refresh_token) {
             localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token)
@@ -122,10 +178,12 @@ export async function login(credentials) {
 
 export async function register(data) {
     try {
-        const response = await api.post('/api/v1/auth/register', data)
+        const response = await api.post('/api/v1/auth/register', data, {
+            timeout: 10000
+        })
+
         const {access_token, refresh_token, user} = response.data
 
-        // Store tokens and user data
         setAuth(access_token, user)
         if (refresh_token) {
             localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token)
@@ -140,7 +198,7 @@ export async function register(data) {
 
 export async function logout() {
     try {
-        await api.post('/api/v1/auth/logout')
+        await api.post('/api/v1/auth/logout', {}, {timeout: 5000})
     } catch (error) {
         // Even if logout fails, clear local storage
         console.error('Logout error:', error)
@@ -150,23 +208,31 @@ export async function logout() {
 }
 
 export async function forgotPassword(data) {
-    return await api.post('/api/v1/auth/password-reset/request', data)
+    return await api.post('/api/v1/auth/password-reset/request', data, {
+        timeout: 10000
+    })
 }
 
 export async function resetPassword(token, newPassword) {
     return await api.post('/api/v1/auth/password-reset/confirm', {
         token,
         new_password: newPassword
+    }, {
+        timeout: 10000
     })
 }
 
 export async function verifyEmail(token) {
-    return await api.post('/api/v1/auth/verify-email', {token})
+    return await api.post('/api/v1/auth/verify-email', {token}, {
+        timeout: 10000
+    })
 }
 
 export async function getCurrentUser() {
     try {
-        const response = await api.get('/api/v1/auth/me')
+        const response = await api.get('/api/v1/auth/me', {
+            timeout: 5000
+        })
         return response.data
     } catch (error) {
         console.error('Get current user error:', error)
